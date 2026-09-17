@@ -1,0 +1,101 @@
+﻿<Window x:Class="FrameTrace.Editor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:FrameTrace.Editor"
+        mc:Ignorable="d"
+        Title="灵映素材管理器" Height="620" Width="980" MinHeight="500" MinWidth="760">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock Text="导入预览" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Margin="0,6,0,0" Foreground="#555555"
+                       Text="选择已整理记录文件夹，或选择包含多条记录的批次目录。可选 metadata.csv：字段,值；支持创建时间、清晰度、宽高比、生成模型或功能。" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,22,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SourceDirectoryTextBox" IsReadOnly="True" MinHeight="32" Padding="8,5" />
+            <Button Grid.Column="1" Margin="12,0,0,0" Padding="12,5" Click="SelectSingleRecord_Click">选择单条记录</Button>
+            <Button Grid.Column="2" Margin="8,0,0,0" Padding="12,5" Click="SelectBatch_Click">选择批次目录</Button>
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="2*" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="SummaryTextBlock" Margin="0,0,0,10" Foreground="#555555"
+                       Text="尚未选择来源目录。" />
+            <Grid Grid.Row="1" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TargetDirectoryTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="#555555" ToolTip="目标路径来自 config.json" />
+                <TextBox Grid.Column="1" x:Name="FolderNameTextBox" Margin="12,0,0,0" MinHeight="32" Padding="8,5"
+                         ToolTip="输入单级分类名称" />
+                <Button Grid.Column="2" Margin="12,0,0,0" Padding="12,5" Click="ManageLibrary_Click">管理已入库素材</Button>
+                <Button Grid.Column="3" x:Name="PublishButton" Margin="12,0,0,0" Padding="12,5"
+                        IsEnabled="False" Click="Publish_Click">发布可用记录</Button>
+            </Grid>
+            <ListView x:Name="PreviewListView" Grid.Row="2" ItemsSource="{Binding PreviewRecords}"
+                      SelectionChanged="PreviewListView_SelectionChanged">
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="记录名称" Width="220" DisplayMemberBinding="{Binding DisplayName}" />
+                        <GridViewColumn Header="主视频" Width="230" DisplayMemberBinding="{Binding MainVideoName}" />
+                        <GridViewColumn Header="引用资源" Width="90" DisplayMemberBinding="{Binding ReferenceCount}" />
+                        <GridViewColumn Header="提示词" Width="130" DisplayMemberBinding="{Binding PromptStatus}" />
+                        <GridViewColumn Header="状态" Width="160" DisplayMemberBinding="{Binding Status}" />
+                        <GridViewColumn Header="说明" Width="150" DisplayMemberBinding="{Binding Details}" />
+                        <GridViewColumn Header="操作" Width="110">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Padding="8,3" Click="AddMetadata_Click" Content="添加 metadata">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMetadataMissing}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+                    </GridView>
+                </ListView.View>
+            </ListView>
+            <Grid Grid.Row="3" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="PromptTextBox" AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" MinHeight="96" Padding="8" IsEnabled="False" />
+                <Button Grid.Column="1" x:Name="ConfirmPromptButton" Margin="12,0,0,0" Padding="12,5"
+                        VerticalAlignment="Top" IsEnabled="False" Click="ConfirmPrompt_Click">确认提示词</Button>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

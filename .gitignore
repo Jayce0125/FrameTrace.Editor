@@ -1,0 +1,12 @@
+.vs/
+bin/
+obj/
+%SystemDrive%/
+
+*.user
+*.suo
+
+TestResults/
+*.pdb
+*.cache
+*.log

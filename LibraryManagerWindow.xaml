@@ -1,0 +1,87 @@
+<Window x:Class="FrameTrace.Editor.LibraryManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="管理已入库素材" Height="820" Width="1120" MinHeight="720" MinWidth="980" WindowStartupLocation="CenterOwner">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="SummaryTextBlock" VerticalAlignment="Center" Foreground="#555555" Text="正在读取已入库素材..." />
+            <Button Grid.Column="1" Padding="12,5" Click="Reload_Click">刷新列表</Button>
+        </Grid>
+        <ListView x:Name="AssetListView" Grid.Row="1" SelectionChanged="AssetListView_SelectionChanged">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="名称" Width="240" DisplayMemberBinding="{Binding DisplayName}" />
+                    <GridViewColumn Header="分类" Width="180" DisplayMemberBinding="{Binding FolderName}" />
+                    <GridViewColumn Header="主视频" Width="240" DisplayMemberBinding="{Binding VideoName}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="160" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center" Text="名称" />
+                <TextBox x:Name="DisplayNameTextBox" Width="220" Margin="8,0,18,0" Padding="6,4" />
+                <TextBlock VerticalAlignment="Center" Text="分类" />
+                <TextBox x:Name="FolderNameTextBox" Width="180" Margin="8,0,0,0" Padding="6,4" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,12,0">
+                <TextBlock VerticalAlignment="Center" Text="作者" />
+                <TextBox x:Name="AuthorTextBox" Width="150" Margin="8,0,18,0" Padding="6,4" />
+                <TextBlock VerticalAlignment="Center" Text="标签（逗号分隔）" />
+                <TextBox x:Name="TagsTextBox" Width="210" Margin="8,0,18,0" Padding="6,4" />
+                <TextBlock VerticalAlignment="Center" Text="评分（1-5）" />
+                <TextBox x:Name="RatingTextBox" Width="60" Margin="8,0,18,0" Padding="6,4" />
+                <TextBlock VerticalAlignment="Center" Text="审核状态" />
+                <ComboBox x:Name="ReviewStatusComboBox" Width="100" Margin="8,0,0,0" SelectedIndex="0">
+                    <ComboBoxItem Content="未审核" />
+                    <ComboBoxItem Content="已通过" />
+                    <ComboBoxItem Content="已拒绝" />
+                </ComboBox>
+            </StackPanel>
+            <Grid Grid.Row="2" Margin="0,10,12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="替换主视频" />
+                <TextBox x:Name="VideoPathTextBox" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
+                <Button Grid.Column="2" Padding="12,5" Click="BrowseVideo_Click">选择</Button>
+                <TextBlock Grid.Row="1" VerticalAlignment="Center" Margin="0,8,0,0" Text="替换封面" />
+                <TextBox x:Name="PosterPathTextBox" Grid.Row="1" Grid.Column="1" Margin="8,8" IsReadOnly="True" Padding="6,4" />
+                <Button Grid.Row="1" Grid.Column="2" Padding="12,5" Click="BrowsePoster_Click" Margin="0,6,0,6">选择</Button>
+                <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="替换参考图" />
+                <TextBox x:Name="ReferencePathsTextBox" Grid.Row="2" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
+                <Button Grid.Row="2" Grid.Column="2" Padding="12,5" Click="BrowseReferences_Click">选择</Button>
+            </Grid>
+            <TextBox x:Name="PromptTextBox" Grid.Row="3" Margin="0,10,12,0" MinHeight="110" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" />
+            <StackPanel Grid.Column="1" Grid.Row="3" Margin="0,10,0,0">
+                <Button Padding="12,5" Click="Save_Click">保存修改</Button>
+                <Button Margin="0,10,0,0" Padding="12,5" Click="Delete_Click">删除此素材</Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
