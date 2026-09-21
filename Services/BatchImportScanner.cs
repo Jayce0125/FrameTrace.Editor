@@ -107,6 +107,20 @@ public sealed class ImportPreviewRecord
     public static ImportPreviewRecord Failed(string sourceDirectory, string message) =>
         new(sourceDirectory, Path.GetFileName(sourceDirectory), RecordScanResult.Failed(message));
 
-    private static string? ReadSingleCandidatePrompt(IReadOnlyList<FileInfo> candidatePromptFiles) =>
-        candidatePromptFiles.Count == 1 ? File.ReadAllText(candidatePromptFiles[0].FullName) : null;
+    private static string? ReadSingleCandidatePrompt(IReadOnlyList<FileInfo> candidatePromptFiles)
+    {
+        if (candidatePromptFiles.Count != 1)
+        {
+            return null;
+        }
+
+        try
+        {
+            return PromptTextReader.Read(candidatePromptFiles[0]);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return null;
+        }
+    }
 }

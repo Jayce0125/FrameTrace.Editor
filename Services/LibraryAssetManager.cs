@@ -12,7 +12,7 @@ public sealed class LibraryAssetManager
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNamingPolicy = new SnakeCaseNamingPolicy(),
         WriteIndented = true
     };
 
@@ -56,32 +56,32 @@ public sealed class LibraryAssetManager
         return assets.OrderBy(asset => asset.Record.FolderName).ThenBy(asset => asset.Record.DisplayName).ToArray();
     }
 
-    public AssetRecord Save(LibraryAsset asset, AssetEdit edit, LibraryConfiguration configuration)
+    public AssetRecord ReplaceMedia(
+        LibraryAsset asset,
+        string videoSourcePath,
+        string posterSourcePath,
+        IReadOnlyList<string> referenceImageSourcePaths,
+        LibraryConfiguration configuration)
     {
-        if (string.IsNullOrWhiteSpace(edit.DisplayName) || string.IsNullOrWhiteSpace(edit.FolderName) || string.IsNullOrWhiteSpace(edit.Prompt))
-        {
-            throw new InvalidDataException("名称、分类和提示词均不能为空。");
-        }
-
         var record = asset.Record;
         var directory = Path.GetDirectoryName(asset.RecordPath)!;
-        var mainVideoPath = string.IsNullOrWhiteSpace(edit.VideoSourcePath)
+        var mainVideoPath = string.IsNullOrWhiteSpace(videoSourcePath)
             ? Path.Combine(directory, record.LocalPath)
-            : CopyReplacement(edit.VideoSourcePath, directory, "video", VideoExtensions);
+            : CopyReplacement(videoSourcePath, directory, "video", VideoExtensions);
         var localPath = Path.GetFileName(mainVideoPath);
-        var posterPath = string.IsNullOrWhiteSpace(edit.PosterSourcePath)
+        var posterPath = string.IsNullOrWhiteSpace(posterSourcePath)
             ? record.PosterPath
-            : Path.GetFileName(CopyReplacement(edit.PosterSourcePath, directory, "poster", ImageExtensions));
-        if (!string.IsNullOrWhiteSpace(edit.VideoSourcePath) && string.IsNullOrWhiteSpace(edit.PosterSourcePath))
+            : Path.GetFileName(CopyReplacement(posterSourcePath, directory, "poster", ImageExtensions));
+        if (!string.IsNullOrWhiteSpace(videoSourcePath) && string.IsNullOrWhiteSpace(posterSourcePath))
         {
             var thumbnail = new VideoThumbnailGenerator().Generate(mainVideoPath, directory, record.Id, configuration);
             posterPath = thumbnail.FileName;
         }
 
-        var references = edit.ReferenceImageSourcePaths.Count == 0
+        var references = referenceImageSourcePaths.Count == 0
             ? record.References
             : record.References.Where(reference => !string.Equals(reference.Type, "image", StringComparison.OrdinalIgnoreCase))
-                .Concat(edit.ReferenceImageSourcePaths.Select((sourcePath, index) => new ReferenceResource
+            .Concat(referenceImageSourcePaths.Select((sourcePath, index) => new ReferenceResource
                 {
                     Type = "image",
                     LocalPath = Path.Combine("references", Path.GetFileName(CopyReplacement(sourcePath, directory, $"reference-{index + 1}", ImageExtensions))).Replace(Path.DirectorySeparatorChar, '/')
@@ -89,19 +89,19 @@ public sealed class LibraryAssetManager
         var updatedRecord = new AssetRecord
         {
             Id = record.Id,
-            DisplayName = edit.DisplayName.Trim(),
+            DisplayName = record.DisplayName,
             MediaType = record.MediaType,
             LocalPath = localPath,
-            FolderName = edit.FolderName.Trim(),
+            FolderName = record.FolderName,
             PosterPath = posterPath,
-            Prompt = edit.Prompt.Trim(),
+            Prompt = record.Prompt,
             ContentHash = ComputeHash(mainVideoPath),
             References = references,
             Meta = new AssetMetadata { Created = record.Meta.Created, Quality = record.Meta.Quality, AspectRatio = record.Meta.AspectRatio, Size = new FileInfo(mainVideoPath).Length, Feature = record.Meta.Feature },
-            Author = string.IsNullOrWhiteSpace(edit.Author) ? null : edit.Author.Trim(),
-            Tags = edit.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            Rating = ParseRating(edit.Rating),
-            ReviewStatus = string.IsNullOrWhiteSpace(edit.ReviewStatus) ? null : edit.ReviewStatus.Trim()
+            Author = record.Author,
+            Tags = record.Tags,
+            Rating = record.Rating,
+            ReviewStatus = record.ReviewStatus
         };
 
         ValidateFiles(directory, updatedRecord);
@@ -127,17 +127,11 @@ public sealed class LibraryAssetManager
         return targetPath;
     }
 
-    private static int? ParseRating(string rating)
-    {
-        if (string.IsNullOrWhiteSpace(rating)) return null;
-        if (!int.TryParse(rating, out var value) || value is < 1 or > 5) throw new InvalidDataException("评分必须是 1 到 5 的整数。");
-        return value;
-    }
-
     private static string ComputeHash(string filePath)
     {
         using var stream = File.OpenRead(filePath);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(stream)).ToLowerInvariant();
     }
 
     private static void ValidateFiles(string directory, AssetRecord record)
@@ -152,4 +146,3 @@ public sealed class LibraryAssetManager
 
 public sealed record LibraryAsset(string RecordPath, AssetRecord Record);
 
-public sealed record AssetEdit(string DisplayName, string FolderName, string Prompt, string Author, string Tags, string Rating, string ReviewStatus, string VideoSourcePath, string PosterSourcePath, IReadOnlyList<string> ReferenceImageSourcePaths);

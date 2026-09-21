@@ -5,7 +5,7 @@ namespace FrameTrace.Editor.Services;
 
 public sealed class LibraryConfiguration
 {
-    public string ProjectName { get; init; } = "灵映素材库";
+    public string ProjectName { get; init; } = "玄机灵界素材库";
 
     public string AssetsDirectory { get; init; } = string.Empty;
 
@@ -32,7 +32,7 @@ public static class LibraryConfigurationLoader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        PropertyNamingPolicy = new SnakeCaseNamingPolicy()
     };
 
     public static LibraryConfiguration Load()

@@ -11,7 +11,7 @@ public sealed class DuplicateAssetDetector
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        PropertyNamingPolicy = new SnakeCaseNamingPolicy()
     };
 
     public DuplicateCheckResult Check(string sourceVideoPath, string assetsDirectory)
@@ -67,7 +67,8 @@ public sealed class DuplicateAssetDetector
     private static string CalculateHash(string filePath)
     {
         using var stream = File.OpenRead(filePath);
-        return Convert.ToHexString(SHA256.HashData(stream));
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(stream));
     }
 }
 

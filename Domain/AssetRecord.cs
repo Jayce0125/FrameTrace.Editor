@@ -2,29 +2,29 @@ namespace FrameTrace.Editor.Domain;
 
 public sealed class AssetRecord
 {
-    public required string Id { get; init; }
+    public string Id { get; init; } = string.Empty;
 
-    public required string DisplayName { get; init; }
+    public string DisplayName { get; init; } = string.Empty;
 
-    public required string MediaType { get; init; }
+    public string MediaType { get; init; } = string.Empty;
 
-    public required string LocalPath { get; init; }
+    public string LocalPath { get; init; } = string.Empty;
 
-    public required string FolderName { get; init; }
+    public string FolderName { get; init; } = string.Empty;
 
     public string? PosterPath { get; init; }
 
-    public required string Prompt { get; init; }
+    public string Prompt { get; init; } = string.Empty;
 
     public string? ContentHash { get; init; }
 
-    public IReadOnlyList<ReferenceResource> References { get; init; } = [];
+    public IReadOnlyList<ReferenceResource> References { get; init; } = Array.Empty<ReferenceResource>();
 
     public AssetMetadata Meta { get; init; } = new();
 
     public string? Author { get; init; }
 
-    public IReadOnlyList<string> Tags { get; init; } = [];
+    public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
 
     public int? Rating { get; init; }
 
@@ -33,9 +33,9 @@ public sealed class AssetRecord
 
 public sealed class ReferenceResource
 {
-    public required string Type { get; init; }
+    public string Type { get; init; } = string.Empty;
 
-    public required string LocalPath { get; init; }
+    public string LocalPath { get; init; } = string.Empty;
 }
 
 public sealed class AssetMetadata

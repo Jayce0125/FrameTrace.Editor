@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FrameTrace.Editor"
         mc:Ignorable="d"
-        Title="灵映素材管理器" Height="620" Width="980" MinHeight="500" MinWidth="760">
+        Title="玄机灵界素材管理器" Height="620" Width="980" MinHeight="500" MinWidth="760">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -68,18 +68,7 @@
                         <GridViewColumn Header="操作" Width="110">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Padding="8,3" Click="AddMetadata_Click" Content="添加 metadata">
-                                        <Button.Style>
-                                            <Style TargetType="Button">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsMetadataMissing}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
+                                    <Button Padding="8,3" Click="AddMetadata_Click" Content="打开 metadata" />
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>

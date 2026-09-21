@@ -12,7 +12,7 @@ public sealed class ViewerIndexPublisher
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNamingPolicy = new SnakeCaseNamingPolicy(),
         WriteIndented = true
     };
 
@@ -247,7 +247,13 @@ public sealed class ViewerIndexPublisher
         var records = new List<AssetRecord>();
         foreach (var pageFile in pageFiles)
         {
-            var relativePath = pageFile.Split('?', 2)[0].Replace('/', Path.DirectorySeparatorChar);
+            var relativePath = pageFile.Split('?', 2)[0].Trim();
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                continue;
+            }
+
+            relativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
             var filePath = Path.IsPathRooted(relativePath)
                 ? relativePath
                 : Path.Combine(Path.GetDirectoryName(folderDataDirectory)!, "..", relativePath);
@@ -260,7 +266,17 @@ public sealed class ViewerIndexPublisher
             var script = File.ReadAllText(filePath);
             var marker = $"{FolderVariable}[";
             var start = script.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                continue;
+            }
+
             var assignment = script.IndexOf('=', start);
+            if (assignment < 0)
+            {
+                continue;
+            }
+
             var json = script[(assignment + 1)..].Trim().TrimEnd(';');
             var document = JsonSerializer.Deserialize<ViewerFolderData>(json, JsonOptions);
             records.AddRange(document?.Assets ?? []);

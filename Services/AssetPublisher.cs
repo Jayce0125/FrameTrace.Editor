@@ -12,7 +12,7 @@ public sealed class AssetPublisher
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNamingPolicy = new SnakeCaseNamingPolicy(),
         WriteIndented = true
     };
 

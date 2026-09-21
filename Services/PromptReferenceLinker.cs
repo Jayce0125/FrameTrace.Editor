@@ -4,8 +4,10 @@ using FrameTrace.Editor.Domain;
 
 namespace FrameTrace.Editor.Services;
 
-public static partial class PromptReferenceLinker
+public static class PromptReferenceLinker
 {
+    private static readonly Regex ImageReferencePattern = new(@"\[@(?<label>Image\s+\d+)\s*->\s*(?<path>[^\]\r\n]+)\]", RegexOptions.IgnoreCase);
+
     public static string ReplaceImagePaths(string prompt, IReadOnlyList<ReferenceResource> references)
     {
         var imagePaths = references
@@ -13,7 +15,7 @@ public static partial class PromptReferenceLinker
             .GroupBy(reference => Path.GetFileName(reference.LocalPath), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().LocalPath, StringComparer.OrdinalIgnoreCase);
 
-        return ImageReferencePattern().Replace(prompt, match =>
+        return ImageReferencePattern.Replace(prompt, match =>
         {
             var originalPath = match.Groups["path"].Value.Trim();
             var fileName = Path.GetFileName(originalPath.Replace('/', Path.DirectorySeparatorChar));
@@ -23,6 +25,4 @@ public static partial class PromptReferenceLinker
         });
     }
 
-    [GeneratedRegex(@"\[@(?<label>Image\s+\d+)\s*->\s*(?<path>[^\]\r\n]+)\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ImageReferencePattern();
 }

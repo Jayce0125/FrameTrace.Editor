@@ -45,10 +45,20 @@ public sealed class RecordFolderScanner
             return RecordScanResult.Failed("找到多个同名主视频，需要在预览页手动确认。", matchingVideos);
         }
 
-        var promptPath = Path.Combine(recordDirectory, "prompt.txt");
-        var prompt = File.Exists(promptPath) ? File.ReadAllText(promptPath) : null;
-        var candidatePromptFiles = directory.EnumerateFiles("*.txt")
+        var docxFiles = directory.EnumerateFiles("*.docx").ToArray();
+        var promptFile = directory.EnumerateFiles()
+            .FirstOrDefault(file => string.Equals(file.Name, "prompt.txt", StringComparison.OrdinalIgnoreCase))
+            ?? directory.EnumerateFiles()
+                .FirstOrDefault(file => string.Equals(file.Name, "prompt.docx", StringComparison.OrdinalIgnoreCase))
+            ?? (docxFiles.Length == 1 ? docxFiles[0] : null);
+        var prompt = TryReadPrompt(promptFile);
+        var promptSource = promptFile is null || string.IsNullOrWhiteSpace(prompt) ? null : promptFile.Name;
+        var candidatePromptFiles = directory.EnumerateFiles()
+            .Where(file => file.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase)
+                || file.Extension.Equals(".docx", StringComparison.OrdinalIgnoreCase))
             .Where(file => !string.Equals(file.Name, "prompt.txt", StringComparison.OrdinalIgnoreCase))
+            .Where(file => !string.Equals(file.Name, "prompt.docx", StringComparison.OrdinalIgnoreCase))
+            .Where(file => promptFile is null || !string.Equals(file.FullName, promptFile.FullName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
         var references = directory.EnumerateFiles("*", SearchOption.AllDirectories)
             .Where(file => !file.Attributes.HasFlag(FileAttributes.Hidden))
@@ -59,7 +69,24 @@ public sealed class RecordFolderScanner
             .Cast<DetectedReferenceResource>()
             .ToArray();
 
-        return RecordScanResult.Valid(matchingVideos[0], prompt, candidatePromptFiles, references);
+        return RecordScanResult.Valid(matchingVideos[0], prompt, promptSource, candidatePromptFiles, references);
+    }
+
+    private static string? TryReadPrompt(FileInfo? promptFile)
+    {
+        if (promptFile is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return PromptTextReader.Read(promptFile);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return null;
+        }
     }
 
     private static bool IsGeneratedOrDescriptionFile(string fileName) =>
@@ -87,6 +114,7 @@ public sealed class RecordScanResult
         string? errorMessage,
         FileInfo? mainVideo,
         string? prompt,
+        string? promptSource,
         IReadOnlyList<FileInfo> candidatePromptFiles,
         IReadOnlyList<FileInfo> ambiguousVideos,
         IReadOnlyList<DetectedReferenceResource> references)
@@ -95,6 +123,7 @@ public sealed class RecordScanResult
         ErrorMessage = errorMessage;
         MainVideo = mainVideo;
         Prompt = prompt;
+        PromptSource = promptSource;
         CandidatePromptFiles = candidatePromptFiles;
         AmbiguousVideos = ambiguousVideos;
         References = references;
@@ -114,6 +143,8 @@ public sealed class RecordScanResult
 
     public string? Prompt { get; }
 
+    public string? PromptSource { get; }
+
     public IReadOnlyList<FileInfo> CandidatePromptFiles { get; }
 
     public IReadOnlyList<FileInfo> AmbiguousVideos { get; }
@@ -123,12 +154,13 @@ public sealed class RecordScanResult
     public static RecordScanResult Valid(
         FileInfo mainVideo,
         string? prompt,
+        string? promptSource,
         IReadOnlyList<FileInfo> candidatePromptFiles,
         IReadOnlyList<DetectedReferenceResource> references) =>
-        new(true, null, mainVideo, prompt, candidatePromptFiles, [], references);
+        new(true, null, mainVideo, prompt, promptSource, candidatePromptFiles, [], references);
 
     public static RecordScanResult Failed(string errorMessage, IReadOnlyList<FileInfo>? ambiguousVideos = null) =>
-        new(false, errorMessage, null, null, [], ambiguousVideos ?? [], []);
+        new(false, errorMessage, null, null, null, [], ambiguousVideos ?? [], []);
 }
 
 public sealed record DetectedReferenceResource(string Type, string RelativePath);

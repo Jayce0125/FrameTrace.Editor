@@ -5,6 +5,8 @@ using FrameTrace.Editor.Services;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using FolderBrowserDialog = System.Windows.Forms.FolderBrowserDialog;
+using MessageBox = System.Windows.MessageBox;
 
 namespace FrameTrace.Editor;
 
@@ -36,19 +38,21 @@ public partial class MainWindow : Window
 
     private void SelectAndScan(ImportSourceKind sourceKind)
     {
-        var dialog = new OpenFolderDialog
+        using var dialog = new FolderBrowserDialog
         {
-            Title = sourceKind == ImportSourceKind.SingleRecord ? "选择已整理记录文件夹" : "选择批次父目录"
+            Description = sourceKind == ImportSourceKind.SingleRecord ? "选择已整理记录文件夹" : "选择批次父目录",
+            UseDescriptionForTitle = true
         };
 
-        if (dialog.ShowDialog() != true)
+        if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
         {
             return;
         }
 
         currentPreview = sourceKind == ImportSourceKind.SingleRecord
-            ? batchImportScanner.ScanSingle(dialog.FolderName)
-            : batchImportScanner.ScanBatch(dialog.FolderName);
+            ? batchImportScanner.ScanSingle(dialog.SelectedPath)
+            : batchImportScanner.ScanBatch(dialog.SelectedPath);
+        EnsureMetadataFiles(currentPreview);
 
         SourceDirectoryTextBox.Text = currentPreview.SourceDirectory;
         PreviewRecords.Clear();
@@ -108,7 +112,11 @@ public partial class MainWindow : Window
                 throw new FileNotFoundException("未找到 metadata.csv.example 模板文件。", templatePath);
             }
 
-            File.Copy(templatePath, metadataPath, false);
+            if (!File.Exists(metadataPath))
+            {
+                File.Copy(templatePath, metadataPath, false);
+            }
+
             row.Record.ReloadMetadata();
             row.Refresh();
             RefreshSummary();
@@ -118,6 +126,29 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             MessageBox.Show($"无法添加或打开 metadata.csv：{exception.Message}", "操作失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private static void EnsureMetadataFiles(ImportPreview preview)
+    {
+        var templatePath = Path.Combine(AppContext.BaseDirectory, "metadata.csv.example");
+        if (!File.Exists(templatePath))
+        {
+            return;
+        }
+
+        foreach (var record in preview.Records.Where(record => record.Metadata.Warning == "缺少必要的 metadata.csv 文件。"))
+        {
+            var metadataPath = Path.Combine(record.SourceDirectory, "metadata.csv");
+            try
+            {
+                File.Copy(templatePath, metadataPath, false);
+                record.ReloadMetadata();
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Keep the original missing-file warning when the source folder is not writable.
+            }
         }
     }
 
@@ -265,7 +296,9 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
             null when Record.ScanResult.CandidatePromptFiles.Count > 0 => "需确认候选文件",
             null => "需要手动填写",
             _ when string.IsNullOrWhiteSpace(Record.ScanResult.Prompt) => "需要手动填写",
-            _ => "已读取 prompt.txt"
+            _ => Record.ScanResult.PromptSource is not null
+                ? $"已读取 {Record.ScanResult.PromptSource}"
+                : "已读取提示词"
         };
         Status = Record.IsReadyForPublication ? "可发布" : "需要处理";
         Details = Record.ScanResult.ErrorMessage ?? Record.Metadata.Warning ?? (Record.IsReadyForPublication ? "校验通过" : "提示词不能为空");

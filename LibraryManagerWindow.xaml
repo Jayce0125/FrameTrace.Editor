@@ -36,26 +36,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock VerticalAlignment="Center" Text="名称" />
-                <TextBox x:Name="DisplayNameTextBox" Width="220" Margin="8,0,18,0" Padding="6,4" />
-                <TextBlock VerticalAlignment="Center" Text="分类" />
-                <TextBox x:Name="FolderNameTextBox" Width="180" Margin="8,0,0,0" Padding="6,4" />
-            </StackPanel>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,12,0">
-                <TextBlock VerticalAlignment="Center" Text="作者" />
-                <TextBox x:Name="AuthorTextBox" Width="150" Margin="8,0,18,0" Padding="6,4" />
-                <TextBlock VerticalAlignment="Center" Text="标签（逗号分隔）" />
-                <TextBox x:Name="TagsTextBox" Width="210" Margin="8,0,18,0" Padding="6,4" />
-                <TextBlock VerticalAlignment="Center" Text="评分（1-5）" />
-                <TextBox x:Name="RatingTextBox" Width="60" Margin="8,0,18,0" Padding="6,4" />
-                <TextBlock VerticalAlignment="Center" Text="审核状态" />
-                <ComboBox x:Name="ReviewStatusComboBox" Width="100" Margin="8,0,0,0" SelectedIndex="0">
-                    <ComboBoxItem Content="未审核" />
-                    <ComboBoxItem Content="已通过" />
-                    <ComboBoxItem Content="已拒绝" />
-                </ComboBox>
-            </StackPanel>
+            <TextBlock Grid.Row="0" Margin="0,0,0,10" Foreground="#555555"
+                       Text="可重新上传主视频、封面或参考图；名称、提示词和其他资料保持不变。" />
             <Grid Grid.Row="2" Margin="0,10,12,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -77,9 +59,8 @@
                 <TextBox x:Name="ReferencePathsTextBox" Grid.Row="2" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
                 <Button Grid.Row="2" Grid.Column="2" Padding="12,5" Click="BrowseReferences_Click">选择</Button>
             </Grid>
-            <TextBox x:Name="PromptTextBox" Grid.Row="3" Margin="0,10,12,0" MinHeight="110" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" />
             <StackPanel Grid.Column="1" Grid.Row="3" Margin="0,10,0,0">
-                <Button Padding="12,5" Click="Save_Click">保存修改</Button>
+                <Button Padding="12,5" Click="ReplaceMedia_Click">重新上传素材</Button>
                 <Button Margin="0,10,0,0" Padding="12,5" Click="Delete_Click">删除此素材</Button>
             </StackPanel>
         </Grid>

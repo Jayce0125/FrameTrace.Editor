@@ -4,6 +4,8 @@ using FrameTrace.Editor.Services;
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace FrameTrace.Editor;
 
@@ -43,19 +45,12 @@ public partial class LibraryManagerWindow : Window
             return;
         }
 
-        DisplayNameTextBox.Text = row.Asset.Record.DisplayName;
-        FolderNameTextBox.Text = row.Asset.Record.FolderName;
-        PromptTextBox.Text = row.Asset.Record.Prompt;
-        AuthorTextBox.Text = row.Asset.Record.Author ?? string.Empty;
-        TagsTextBox.Text = string.Join(", ", row.Asset.Record.Tags);
-        RatingTextBox.Text = row.Asset.Record.Rating?.ToString() ?? string.Empty;
-        ReviewStatusComboBox.Text = row.Asset.Record.ReviewStatus ?? "未审核";
         VideoPathTextBox.Clear();
         PosterPathTextBox.Clear();
         ReferencePathsTextBox.Clear();
     }
 
-    private void Save_Click(object sender, RoutedEventArgs eventArgs)
+    private void ReplaceMedia_Click(object sender, RoutedEventArgs eventArgs)
     {
         if (AssetListView.SelectedItem is not LibraryAssetRow row)
         {
@@ -73,15 +68,13 @@ public partial class LibraryManagerWindow : Window
 
             using (publishLock)
             {
-                var updated = assetManager.Save(row.Asset, new AssetEdit(
-                    DisplayNameTextBox.Text, FolderNameTextBox.Text, PromptTextBox.Text, AuthorTextBox.Text,
-                    TagsTextBox.Text, RatingTextBox.Text, ReviewStatusComboBox.Text, VideoPathTextBox.Text,
-                    PosterPathTextBox.Text, SplitReferencePaths()), configuration);
+                var updated = assetManager.ReplaceMedia(row.Asset, VideoPathTextBox.Text, PosterPathTextBox.Text,
+                    SplitReferencePaths(), configuration);
                 indexPublisher.Update(configuration.WebViewerDirectory, configuration.ProjectName, row.Asset.Record.FolderName,
                     updated, Path.GetDirectoryName(row.Asset.RecordPath)!, configuration.ViewerPageSize);
             }
             Reload();
-            MessageBox.Show("修改已保存，网页索引已更新。", "保存完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("素材已重新上传，网页索引已更新。", "上传完成", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception exception)
         {
@@ -116,9 +109,6 @@ public partial class LibraryManagerWindow : Window
                 assetManager.Delete(row.Asset);
             }
             Reload();
-            DisplayNameTextBox.Clear();
-            FolderNameTextBox.Clear();
-            PromptTextBox.Clear();
             MessageBox.Show("素材已删除，网页索引已更新。", "删除完成", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception exception)
@@ -149,9 +139,14 @@ public partial class LibraryManagerWindow : Window
     private IReadOnlyList<string> SplitReferencePaths() => ReferencePathsTextBox.Text.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
-public sealed class LibraryAssetRow(LibraryAsset asset)
+public sealed class LibraryAssetRow
 {
-    public LibraryAsset Asset { get; } = asset;
+    public LibraryAssetRow(LibraryAsset asset)
+    {
+        Asset = asset;
+    }
+
+    public LibraryAsset Asset { get; }
     public string DisplayName => Asset.Record.DisplayName;
     public string FolderName => Asset.Record.FolderName;
     public string VideoName => Asset.Record.LocalPath;
