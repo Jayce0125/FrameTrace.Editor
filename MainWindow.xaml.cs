@@ -14,11 +14,14 @@ public partial class MainWindow : Window
 {
     private readonly BatchImportScanner batchImportScanner = new();
     private readonly AssetPublisher assetPublisher = new();
-    private readonly ViewerIndexPublisher viewerIndexPublisher = new();
+    private readonly TreeViewerIndexPublisher viewerIndexPublisher = new();
+    private readonly CategoryCatalogReader categoryCatalogReader = new();
     private readonly LibraryConfiguration configuration;
     private ImportPreview? currentPreview;
 
     public ObservableCollection<PreviewRecordRow> PreviewRecords { get; } = [];
+
+    public ObservableCollection<string> CategoryPaths { get; } = [];
 
     public MainWindow()
     {
@@ -27,7 +30,15 @@ public partial class MainWindow : Window
         TargetDirectoryTextBlock.Text = configuration.IsConfigured
             ? $"目标素材库：{configuration.AssetsDirectory}"
             : "请先在 config.json 中配置 NAS 目标目录。";
+        LoadCategoryPaths();
+        LibraryManagerControl.Configure(configuration);
         DataContext = this;
+    }
+
+    private void LoadCategoryPaths()
+    {
+        CategoryPaths.Clear();
+        foreach (var path in categoryCatalogReader.ReadPaths(configuration.WebViewerDirectory)) CategoryPaths.Add(path);
     }
 
     private void SelectSingleRecord_Click(object sender, RoutedEventArgs eventArgs) =>
@@ -60,6 +71,13 @@ public partial class MainWindow : Window
         {
             PreviewRecords.Add(new PreviewRecordRow(record));
         }
+
+        var suggestedPaths = currentPreview.Records
+            .Select(record => record.SuggestedCategoryPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        CategoryPathComboBox.Text = suggestedPaths.Length == 1 ? suggestedPaths[0]!.Replace(Path.DirectorySeparatorChar, '/') : string.Empty;
 
         RefreshSummary();
         PromptTextBox.Clear();
@@ -160,7 +178,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        new LibraryManagerWindow(configuration) { Owner = this }.ShowDialog();
+        MainTabControl.SelectedItem = ManagementTabItem;
+        LibraryManagerControl.ReloadData();
     }
 
     private void Publish_Click(object sender, RoutedEventArgs eventArgs)
@@ -176,10 +195,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var folderName = FolderNameTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(folderName))
+        var categoryPath = CategoryPathComboBox.Text.Trim();
+        var hasRecordsWithoutSuggestedCategory = currentPreview.Records.Any(record =>
+            record.IsReadyForPublication && string.IsNullOrWhiteSpace(record.SuggestedCategoryPath));
+        if (hasRecordsWithoutSuggestedCategory && string.IsNullOrWhiteSpace(categoryPath))
         {
-            MessageBox.Show("请填写单级分类名称。", "无法发布", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("请选择或填写分类路径。", "无法发布", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -202,7 +223,10 @@ public partial class MainWindow : Window
                 PublishResult result;
                 try
                 {
-                    result = assetPublisher.Publish(record, configuration, folderName);
+                    var recordCategoryPath = string.IsNullOrWhiteSpace(record.SuggestedCategoryPath)
+                        ? categoryPath
+                        : record.SuggestedCategoryPath;
+                    result = assetPublisher.Publish(record, configuration, recordCategoryPath!.Replace(" / ", "/", StringComparison.Ordinal).Replace(Path.DirectorySeparatorChar, '/'));
                 }
                 catch (Exception exception)
                 {
@@ -234,10 +258,9 @@ public partial class MainWindow : Window
                 try
                 {
                     viewerIndexPublisher.Publish(
+                        configuration.AssetsDirectory,
                         configuration.WebViewerDirectory,
                         configuration.ProjectName,
-                        folderName,
-                        publishedAssets,
                         configuration.ViewerPageSize);
                 }
                 catch (Exception exception)
@@ -245,6 +268,8 @@ public partial class MainWindow : Window
                     failures.Add($"展示索引未更新: {exception.Message}。已入库的素材不会丢失，可在修复网页数据后重新发布。 ");
                 }
             }
+
+            LoadCategoryPaths();
 
             var message = $"发布完成。成功 {succeeded} 条，跳过 {skipped} 条，失败 {failures.Count} 条，警告 {warnings.Count} 条。";
             if (failures.Count > 0)
@@ -290,6 +315,9 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
     public void Refresh()
     {
         DisplayName = Record.DisplayName;
+        CategoryPath = string.IsNullOrWhiteSpace(Record.SuggestedCategoryPath)
+            ? "未指定"
+            : Record.SuggestedCategoryPath.Replace(Path.DirectorySeparatorChar, '/');
         MainVideoName = Record.ScanResult.MainVideo?.Name ?? "未识别";
         PromptStatus = Record.ScanResult.Prompt switch
         {
@@ -309,6 +337,8 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
     public bool IsMetadataMissing => Record.Metadata.Warning == "缺少必要的 metadata.csv 文件。";
 
     public string DisplayName { get; private set; } = string.Empty;
+
+    public string CategoryPath { get; private set; } = string.Empty;
 
     public string MainVideoName { get; private set; } = string.Empty;
 

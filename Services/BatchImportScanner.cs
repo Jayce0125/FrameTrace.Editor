@@ -8,7 +8,7 @@ public sealed class BatchImportScanner
 
     public ImportPreview ScanSingle(string recordDirectory)
     {
-        var record = CreatePreviewRecord(recordDirectory);
+        var record = CreatePreviewRecord(recordDirectory, null);
         return new ImportPreview(recordDirectory, ImportSourceKind.SingleRecord, [record]);
     }
 
@@ -22,23 +22,38 @@ public sealed class BatchImportScanner
                 [ImportPreviewRecord.Failed(batchDirectory, "批次文件夹不存在。")]);
         }
 
+        var batchRoot = Path.GetFullPath(batchDirectory);
         var records = new DirectoryInfo(batchDirectory)
-            .EnumerateDirectories()
-            .OrderBy(directory => directory.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(directory => CreatePreviewRecord(directory.FullName))
+            .EnumerateDirectories("*", SearchOption.AllDirectories)
+            .Where(HasMainVideo)
+            .OrderBy(directory => Path.GetRelativePath(batchRoot, directory.FullName), StringComparer.OrdinalIgnoreCase)
+            .Select(directory => CreatePreviewRecord(
+                directory.FullName,
+                Path.GetRelativePath(batchRoot, directory.Parent?.FullName ?? batchRoot)))
             .ToArray();
+
+        if (records.Length == 0)
+        {
+            return new ImportPreview(batchDirectory, ImportSourceKind.BatchDirectory,
+                [ImportPreviewRecord.Failed(batchDirectory, "批次目录中未找到可识别的记录文件夹。记录目录应直接包含与目录同名的视频文件，例如：分类/10/10.mp4")]);
+        }
 
         return new ImportPreview(batchDirectory, ImportSourceKind.BatchDirectory, records);
     }
 
-    private ImportPreviewRecord CreatePreviewRecord(string recordDirectory)
+    private ImportPreviewRecord CreatePreviewRecord(string recordDirectory, string? suggestedCategoryPath)
     {
         var scanResult = recordFolderScanner.Scan(recordDirectory);
         return new ImportPreviewRecord(
             recordDirectory,
             Path.GetFileName(recordDirectory),
-            scanResult);
+            scanResult,
+            suggestedCategoryPath);
     }
+
+    private static bool HasMainVideo(DirectoryInfo directory) => directory.EnumerateFiles()
+        .Any(file => string.Equals(Path.GetFileNameWithoutExtension(file.Name), directory.Name, StringComparison.OrdinalIgnoreCase)
+            && RecordFolderScanner.IsVideoExtension(file.Extension));
 }
 
 public enum ImportSourceKind
@@ -71,11 +86,12 @@ public sealed class ImportPreview
 
 public sealed class ImportPreviewRecord
 {
-    public ImportPreviewRecord(string sourceDirectory, string displayName, RecordScanResult scanResult)
+    public ImportPreviewRecord(string sourceDirectory, string displayName, RecordScanResult scanResult, string? suggestedCategoryPath = null)
     {
         SourceDirectory = sourceDirectory;
         DisplayName = displayName;
         ScanResult = scanResult;
+        SuggestedCategoryPath = suggestedCategoryPath;
         Metadata = MetadataCsvReader.Read(sourceDirectory);
         ConfirmedPrompt = scanResult.Prompt ?? ReadSingleCandidatePrompt(scanResult.CandidatePromptFiles);
         IsPromptConfirmed = scanResult.Prompt is not null;
@@ -86,6 +102,8 @@ public sealed class ImportPreviewRecord
     public string DisplayName { get; }
 
     public RecordScanResult ScanResult { get; }
+
+    public string? SuggestedCategoryPath { get; }
 
     public ImportMetadata Metadata { get; private set; }
 

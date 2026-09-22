@@ -45,6 +45,7 @@ public sealed class LibraryAssetManager
                     continue;
                 }
 
+                record.SourcePath = recordPath;
                 assets.Add(new LibraryAsset(recordPath, record));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -53,7 +54,7 @@ public sealed class LibraryAssetManager
             }
         }
 
-        return assets.OrderBy(asset => asset.Record.FolderName).ThenBy(asset => asset.Record.DisplayName).ToArray();
+        return assets.OrderBy(asset => asset.Record.FolderName).ThenBy(asset => asset.Record.Order).ThenBy(asset => asset.Record.DisplayName).ToArray();
     }
 
     public AssetRecord ReplaceMedia(
@@ -93,6 +94,8 @@ public sealed class LibraryAssetManager
             MediaType = record.MediaType,
             LocalPath = localPath,
             FolderName = record.FolderName,
+            CategoryId = record.CategoryId,
+            Order = record.Order,
             PosterPath = posterPath,
             Prompt = record.Prompt,
             ContentHash = ComputeHash(mainVideoPath),
@@ -142,6 +145,31 @@ public sealed class LibraryAssetManager
     }
 
     public void Delete(LibraryAsset asset) => Directory.Delete(Path.GetDirectoryName(asset.RecordPath)!, true);
+
+    public void Clear(string assetsDirectory)
+    {
+        if (!Directory.Exists(assetsDirectory))
+        {
+            return;
+        }
+
+        foreach (var path in Directory.EnumerateFileSystemEntries(assetsDirectory).ToArray())
+        {
+            if (string.Equals(Path.GetFileName(path), ".frametrace.publish.lock", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, true);
+            }
+            else
+            {
+                File.Delete(path);
+            }
+        }
+    }
 }
 
 public sealed record LibraryAsset(string RecordPath, AssetRecord Record);

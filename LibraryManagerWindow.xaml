@@ -1,8 +1,12 @@
-<Window x:Class="FrameTrace.Editor.LibraryManagerWindow"
+<UserControl x:Class="FrameTrace.Editor.LibraryManagerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="管理已入库素材" Height="820" Width="1120" MinHeight="720" MinWidth="980" WindowStartupLocation="CenterOwner">
-    <Grid Margin="24">
+    xmlns:local="clr-namespace:FrameTrace.Editor"
+        MinWidth="0" MinHeight="0">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </UserControl.Resources>
+    <Grid Margin="0,0,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -14,31 +18,113 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="SummaryTextBlock" VerticalAlignment="Center" Foreground="#555555" Text="正在读取已入库素材..." />
-            <Button Grid.Column="1" Padding="12,5" Click="Reload_Click">刷新列表</Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Padding="12,5" Click="Reload_Click">刷新列表</Button>
+                <Button Margin="8,0,0,0" Padding="12,5" Click="RepairAndPublish_Click">修复并发布索引</Button>
+                <Button Margin="8,0,0,0" Padding="12,5" Click="DeleteSelected_Click">删除选中</Button>
+                <Button Margin="8,0,0,0" Padding="12,5" Click="ClearLibrary_Click">清空素材库</Button>
+            </StackPanel>
         </Grid>
-        <ListView x:Name="AssetListView" Grid.Row="1" SelectionChanged="AssetListView_SelectionChanged">
-            <ListView.View>
-                <GridView>
-                    <GridViewColumn Header="名称" Width="240" DisplayMemberBinding="{Binding DisplayName}" />
-                    <GridViewColumn Header="分类" Width="180" DisplayMemberBinding="{Binding FolderName}" />
-                    <GridViewColumn Header="主视频" Width="240" DisplayMemberBinding="{Binding VideoName}" />
-                </GridView>
-            </ListView.View>
-        </ListView>
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="12" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="160" />
             </Grid.ColumnDefinitions>
+            <TreeView x:Name="CategoryTreeView" AllowDrop="True"
+                      SelectedItemChanged="CategoryTreeView_SelectedItemChanged"
+                      PreviewMouseLeftButtonDown="CategoryTreeView_PreviewMouseLeftButtonDown"
+                      PreviewMouseMove="CategoryTreeView_PreviewMouseMove"
+                      PreviewDragOver="CategoryTreeView_DragOver"
+                      PreviewDragLeave="CategoryTreeView_DragLeave"
+                      PreviewDrop="CategoryTreeView_Drop">
+                <TreeView.Resources>
+                    <HierarchicalDataTemplate DataType="{x:Type local:CategoryTreeItem}" ItemsSource="{Binding Children}">
+                        <Border Padding="2" BorderThickness="0,0,0,2">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="BorderBrush" Value="Transparent" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                                            <Setter Property="BorderBrush" Value="#2D7DCC" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding Name}" />
+                        </Border>
+                    </HierarchicalDataTemplate>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="{Binding IsExpanded}" />
+                    </Style>
+                </TreeView.Resources>
+            </TreeView>
+            <ListView x:Name="AssetListView" Grid.Column="2" AllowDrop="True"
+                      SelectionMode="Extended" SelectionChanged="AssetListView_SelectionChanged"
+                      PreviewMouseLeftButtonDown="AssetListView_PreviewMouseLeftButtonDown"
+                      PreviewMouseMove="AssetListView_PreviewMouseMove"
+                      PreviewDragOver="AssetListView_DragOver"
+                      PreviewDrop="AssetListView_Drop">
+                <ListView.Resources>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="BorderThickness" Value="0,0,0,2" />
+                        <Setter Property="BorderBrush" Value="Transparent" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListViewItem">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="5" />
+                                        </Grid.RowDefinitions>
+                                        <Border Grid.Row="0"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <GridViewRowPresenter Content="{TemplateBinding Content}"
+                                                                  Columns="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListView}}, Path=View.Columns}" />
+                                        </Border>
+                                        <Rectangle Grid.Row="1"
+                                                   Height="5"
+                                                   HorizontalAlignment="Stretch"
+                                                   Fill="#FF0084FF"
+                                                   Visibility="{Binding Content.IsDropTarget, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <!--<Border >
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+                                                            <Setter Property="Background" Value="#2D7DCC" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>-->
+                                    </Grid>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListView.Resources>
+                <ListView.View>
+                    <GridView>
+                        <GridViewColumn Header="名称" Width="240" DisplayMemberBinding="{Binding DisplayName}" />
+                        <GridViewColumn Header="分类" Width="180" DisplayMemberBinding="{Binding FolderName}" />
+                        <GridViewColumn Header="主视频" Width="240" DisplayMemberBinding="{Binding VideoName}" />
+                    </GridView>
+                </ListView.View>
+            </ListView>
+        </Grid>
+        <Grid Grid.Row="2" Margin="0,16,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Margin="0,0,0,10" Foreground="#555555"
                        Text="可重新上传主视频、封面或参考图；名称、提示词和其他资料保持不变。" />
-            <Grid Grid.Row="2" Margin="0,10,12,0">
+            <Grid Grid.Row="1" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -59,10 +145,10 @@
                 <TextBox x:Name="ReferencePathsTextBox" Grid.Row="2" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
                 <Button Grid.Row="2" Grid.Column="2" Padding="12,5" Click="BrowseReferences_Click">选择</Button>
             </Grid>
-            <StackPanel Grid.Column="1" Grid.Row="3" Margin="0,10,0,0">
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Padding="12,5" Click="ReplaceMedia_Click">重新上传素材</Button>
-                <Button Margin="0,10,0,0" Padding="12,5" Click="Delete_Click">删除此素材</Button>
+                <Button Margin="10,0,0,0" Padding="12,5" Click="Delete_Click">删除此素材</Button>
             </StackPanel>
         </Grid>
     </Grid>
-</Window>
+</UserControl>

@@ -6,7 +6,9 @@
         xmlns:local="clr-namespace:FrameTrace.Editor"
         mc:Ignorable="d"
         Title="玄机灵界素材管理器" Height="620" Width="980" MinHeight="500" MinWidth="760">
-    <Grid Margin="24">
+    <TabControl x:Name="MainTabControl" Margin="24">
+        <TabItem Header="导入">
+            <Grid Margin="0,16,0,0">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -43,14 +45,14 @@
             <Grid Grid.Row="1" Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="160" />
+                    <ColumnDefinition Width="240" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="TargetDirectoryTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Foreground="#555555" ToolTip="目标路径来自 config.json" />
-                <TextBox Grid.Column="1" x:Name="FolderNameTextBox" Margin="12,0,0,0" MinHeight="32" Padding="8,5"
-                         ToolTip="输入单级分类名称" />
+                <ComboBox Grid.Column="1" x:Name="CategoryPathComboBox" Margin="12,0,0,0" MinHeight="32" Padding="8,5"
+                          IsEditable="True" ItemsSource="{Binding CategoryPaths}" ToolTip="选择已有分类，或输入多级路径，例如：动画 / 角色 / 服装" />
                 <Button Grid.Column="2" Margin="12,0,0,0" Padding="12,5" Click="ManageLibrary_Click">管理已入库素材</Button>
                 <Button Grid.Column="3" x:Name="PublishButton" Margin="12,0,0,0" Padding="12,5"
                         IsEnabled="False" Click="Publish_Click">发布可用记录</Button>
@@ -60,6 +62,7 @@
                 <ListView.View>
                     <GridView>
                         <GridViewColumn Header="记录名称" Width="220" DisplayMemberBinding="{Binding DisplayName}" />
+                        <GridViewColumn Header="分类" Width="180" DisplayMemberBinding="{Binding CategoryPath}" />
                         <GridViewColumn Header="主视频" Width="230" DisplayMemberBinding="{Binding MainVideoName}" />
                         <GridViewColumn Header="引用资源" Width="90" DisplayMemberBinding="{Binding ReferenceCount}" />
                         <GridViewColumn Header="提示词" Width="130" DisplayMemberBinding="{Binding PromptStatus}" />
@@ -85,6 +88,11 @@
                 <Button Grid.Column="1" x:Name="ConfirmPromptButton" Margin="12,0,0,0" Padding="12,5"
                         VerticalAlignment="Top" IsEnabled="False" Click="ConfirmPrompt_Click">确认提示词</Button>
             </Grid>
-        </Grid>
-    </Grid>
+            </Grid>
+            </Grid>
+        </TabItem>
+        <TabItem x:Name="ManagementTabItem" Header="管理">
+            <local:LibraryManagerWindow x:Name="LibraryManagerControl" />
+        </TabItem>
+    </TabControl>
 </Window>

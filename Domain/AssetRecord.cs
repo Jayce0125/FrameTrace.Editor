@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace FrameTrace.Editor.Domain;
 
 public sealed class AssetRecord
@@ -10,7 +12,14 @@ public sealed class AssetRecord
 
     public string LocalPath { get; init; } = string.Empty;
 
-    public string FolderName { get; init; } = string.Empty;
+    public string FolderName { get; set; } = string.Empty;
+
+    public string CategoryId { get; set; } = string.Empty;
+
+    public int Order { get; set; }
+
+    [JsonIgnore]
+    public string? SourcePath { get; set; }
 
     public string? PosterPath { get; init; }
 

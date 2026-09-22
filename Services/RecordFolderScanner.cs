@@ -19,6 +19,8 @@ public sealed class RecordFolderScanner
         ".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg"
     };
 
+    public static bool IsVideoExtension(string extension) => VideoExtensions.Contains(extension);
+
     public RecordScanResult Scan(string recordDirectory)
     {
         if (!Directory.Exists(recordDirectory))
