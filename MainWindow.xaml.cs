@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using FrameTrace.Editor.Services;
@@ -13,6 +13,7 @@ namespace FrameTrace.Editor;
 public partial class MainWindow : Window
 {
     private readonly BatchImportScanner batchImportScanner = new();
+    private readonly DuplicateAssetDetector duplicateAssetDetector = new();
     private readonly AssetPublisher assetPublisher = new();
     private readonly TreeViewerIndexPublisher viewerIndexPublisher = new();
     private readonly CategoryCatalogReader categoryCatalogReader = new();
@@ -64,6 +65,7 @@ public partial class MainWindow : Window
             ? batchImportScanner.ScanSingle(dialog.SelectedPath)
             : batchImportScanner.ScanBatch(dialog.SelectedPath);
         EnsureMetadataFiles(currentPreview);
+        RunPreflightChecks(currentPreview);
 
         SourceDirectoryTextBox.Text = currentPreview.SourceDirectory;
         PreviewRecords.Clear();
@@ -109,6 +111,10 @@ public partial class MainWindow : Window
         }
 
         row.Record.ConfirmPrompt(PromptTextBox.Text);
+        if (currentPreview is not null)
+        {
+            RunPreflightChecks(currentPreview);
+        }
         row.Refresh();
         RefreshSummary();
         UpdatePublishAvailability();
@@ -136,6 +142,10 @@ public partial class MainWindow : Window
             }
 
             row.Record.ReloadMetadata();
+            if (currentPreview is not null)
+            {
+                RunPreflightChecks(currentPreview);
+            }
             row.Refresh();
             RefreshSummary();
             UpdatePublishAvailability();
@@ -152,6 +162,11 @@ public partial class MainWindow : Window
         var templatePath = Path.Combine(AppContext.BaseDirectory, "metadata.csv.example");
         if (!File.Exists(templatePath))
         {
+            foreach (var record in preview.Records.Where(record => record.Metadata.Warning == "缺少必要的 metadata.csv 文件。"))
+            {
+                record.SetMetadataWarning("缺少 metadata.csv，且未找到 metadata.csv.example 模板，无法自动创建。");
+            }
+
             return;
         }
 
@@ -165,7 +180,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // Keep the original missing-file warning when the source folder is not writable.
+                record.SetMetadataWarning($"缺少 metadata.csv，且无法从模板自动创建：{exception.Message}");
             }
         }
     }
@@ -214,10 +229,11 @@ public partial class MainWindow : Window
         {
             var readyRecords = currentPreview.Records.Where(record => record.IsReadyForPublication).ToArray();
             var succeeded = 0;
-            var skipped = currentPreview.TotalCount - readyRecords.Length;
+            var skipped = 0;
             var failures = new List<string>();
             var warnings = new List<string>();
             var publishedAssets = new List<PublishResult>();
+
             foreach (var record in readyRecords)
             {
                 PublishResult result;
@@ -230,13 +246,16 @@ public partial class MainWindow : Window
                 }
                 catch (Exception exception)
                 {
-                    failures.Add($"{record.DisplayName}: 发布时发生未预期错误：{exception.Message}");
+                    var error = $"发布时发生未预期错误：{exception.Message}";
+                    record.MarkFailed(error);
+                    failures.Add($"{record.DisplayName}: {error}");
                     continue;
                 }
 
                 if (result.IsSuccessful && result.Record is not null)
                 {
                     succeeded++;
+                    record.MarkImported();
                     publishedAssets.Add(result);
                     if (!string.IsNullOrWhiteSpace(result.WarningMessage))
                     {
@@ -246,10 +265,13 @@ public partial class MainWindow : Window
                 else if (result.IsSkipped)
                 {
                     skipped++;
+                    record.MarkSkipped(result.SkipReason!);
                 }
                 else
                 {
-                    failures.Add($"{record.DisplayName}: {result.ErrorMessage}");
+                    var error = result.ErrorMessage ?? "发布失败。";
+                    record.MarkFailed(error);
+                    failures.Add($"{record.DisplayName}: {error}");
                 }
             }
 
@@ -270,6 +292,9 @@ public partial class MainWindow : Window
             }
 
             LoadCategoryPaths();
+            RefreshPreviewRows();
+            RefreshSummary();
+            UpdatePublishAvailability();
 
             var message = $"发布完成。成功 {succeeded} 条，跳过 {skipped} 条，失败 {failures.Count} 条，警告 {warnings.Count} 条。";
             if (failures.Count > 0)
@@ -293,12 +318,58 @@ public partial class MainWindow : Window
             return;
         }
 
-        SummaryTextBlock.Text = $"共识别 {currentPreview.TotalCount} 条记录；可发布 {currentPreview.ReadyCount} 条；需处理 {currentPreview.NeedsAttentionCount} 条。";
+        var hasImportResults = currentPreview.ImportedCount > 0 ||
+            currentPreview.SkippedCount > 0 ||
+            currentPreview.FailedCount > 0;
+        SummaryTextBlock.Text = hasImportResults
+            ? $"共识别 {currentPreview.TotalCount} 条记录；已导入 {currentPreview.ImportedCount} 条；已跳过 {currentPreview.SkippedCount} 条；导入失败 {currentPreview.FailedCount} 条；需处理 {currentPreview.NeedsAttentionCount} 条。"
+            : $"共识别 {currentPreview.TotalCount} 条记录；可发布 {currentPreview.ReadyCount} 条；需处理 {currentPreview.NeedsAttentionCount} 条。";
+    }
+
+    private void RunPreflightChecks(ImportPreview preview)
+    {
+        foreach (var record in preview.Records)
+        {
+            record.SetPreflightMessage(null);
+            if (!record.ScanResult.IsValid ||
+                record.Metadata.Warning is not null ||
+                !record.IsPromptConfirmed ||
+                string.IsNullOrWhiteSpace(record.ConfirmedPrompt) ||
+                !configuration.IsConfigured ||
+                record.ScanResult.MainVideo is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var duplicateCheck = duplicateAssetDetector.Check(
+                    record.ScanResult.MainVideo.FullName,
+                    record.DisplayName,
+                    configuration.AssetsDirectory);
+                if (duplicateCheck.IsDuplicate)
+                {
+                    record.SetPreflightMessage($"与已发布记录“{duplicateCheck.ExistingDisplayName}”的主视频内容相同。");
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                record.SetPreflightMessage($"无法完成重复素材检查：{exception.Message}");
+            }
+        }
     }
 
     private void UpdatePublishAvailability()
     {
         PublishButton.IsEnabled = currentPreview?.ReadyCount > 0;
+    }
+
+    private void RefreshPreviewRows()
+    {
+        foreach (var row in PreviewRecords)
+        {
+            row.Refresh();
+        }
     }
 }
 
@@ -328,8 +399,23 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
                 ? $"已读取 {Record.ScanResult.PromptSource}"
                 : "已读取提示词"
         };
-        Status = Record.IsReadyForPublication ? "可发布" : "需要处理";
-        Details = Record.ScanResult.ErrorMessage ?? Record.Metadata.Warning ?? (Record.IsReadyForPublication ? "校验通过" : "提示词不能为空");
+        Status = Record.ImportState switch
+        {
+            ImportState.Imported => "已导入",
+            ImportState.Skipped => "已跳过",
+            ImportState.Failed => "导入失败",
+            _ when Record.IsReadyForPublication => "待导入",
+            _ => "需要处理"
+        };
+        Details = Record.ImportState switch
+        {
+            ImportState.Skipped => $"跳过原因：{Record.ImportMessage ?? Record.GetBlockingReason()}",
+            ImportState.Failed => $"失败原因：{Record.ImportMessage ?? "发布失败。"}",
+            _ => Record.ScanResult.ErrorMessage ??
+                Record.Metadata.Warning ??
+                Record.PreflightMessage ??
+                (Record.IsReadyForPublication ? "校验通过" : "提示词不能为空")
+        };
         ReferenceCount = Record.ScanResult.References.Count.ToString();
         PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
     }

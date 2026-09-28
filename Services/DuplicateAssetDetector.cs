@@ -14,7 +14,7 @@ public sealed class DuplicateAssetDetector
         PropertyNamingPolicy = new SnakeCaseNamingPolicy()
     };
 
-    public DuplicateCheckResult Check(string sourceVideoPath, string assetsDirectory)
+    public DuplicateCheckResult Check(string sourceVideoPath, string sourceDisplayName, string assetsDirectory)
     {
         var sourceHash = CalculateHash(sourceVideoPath);
         if (!Directory.Exists(assetsDirectory))
@@ -30,18 +30,18 @@ public sealed class DuplicateAssetDetector
                 continue;
             }
 
-            var existingHash = record.ContentHash;
-            if (string.IsNullOrWhiteSpace(existingHash))
+            if (!string.Equals(sourceDisplayName, record.DisplayName, StringComparison.OrdinalIgnoreCase))
             {
-                var existingVideoPath = Path.Combine(Path.GetDirectoryName(recordPath)!, record.LocalPath);
-                if (!File.Exists(existingVideoPath))
-                {
-                    continue;
-                }
-
-                existingHash = CalculateHash(existingVideoPath);
+                continue;
             }
 
+            var existingVideoPath = Path.Combine(Path.GetDirectoryName(recordPath)!, record.LocalPath);
+            if (!File.Exists(existingVideoPath))
+            {
+                continue;
+            }
+
+            var existingHash = CalculateHash(existingVideoPath);
             if (string.Equals(sourceHash, existingHash, StringComparison.OrdinalIgnoreCase))
             {
                 return DuplicateCheckResult.Duplicate(sourceHash, record.DisplayName);
@@ -67,8 +67,8 @@ public sealed class DuplicateAssetDetector
     private static string CalculateHash(string filePath)
     {
         using var stream = File.OpenRead(filePath);
-        using var sha256 = SHA256.Create();
-        return Convert.ToHexString(sha256.ComputeHash(stream));
+        using var md5 = MD5.Create();
+        return Convert.ToHexString(md5.ComputeHash(stream));
     }
 }
 

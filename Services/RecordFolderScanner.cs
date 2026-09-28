@@ -48,11 +48,13 @@ public sealed class RecordFolderScanner
         }
 
         var docxFiles = directory.EnumerateFiles("*.docx").ToArray();
+        var txtFiles = directory.EnumerateFiles("*.txt").ToArray();
         var promptFile = directory.EnumerateFiles()
             .FirstOrDefault(file => string.Equals(file.Name, "prompt.txt", StringComparison.OrdinalIgnoreCase))
             ?? directory.EnumerateFiles()
                 .FirstOrDefault(file => string.Equals(file.Name, "prompt.docx", StringComparison.OrdinalIgnoreCase))
-            ?? (docxFiles.Length == 1 ? docxFiles[0] : null);
+            ?? (docxFiles.Length == 1 ? docxFiles[0] : null)
+            ?? (txtFiles.Length == 1 ? txtFiles[0] : null);
         var prompt = TryReadPrompt(promptFile);
         var promptSource = promptFile is null || string.IsNullOrWhiteSpace(prompt) ? null : promptFile.Name;
         var candidatePromptFiles = directory.EnumerateFiles()

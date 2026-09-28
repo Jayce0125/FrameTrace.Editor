@@ -66,8 +66,14 @@
                         <GridViewColumn Header="主视频" Width="230" DisplayMemberBinding="{Binding MainVideoName}" />
                         <GridViewColumn Header="引用资源" Width="90" DisplayMemberBinding="{Binding ReferenceCount}" />
                         <GridViewColumn Header="提示词" Width="130" DisplayMemberBinding="{Binding PromptStatus}" />
-                        <GridViewColumn Header="状态" Width="160" DisplayMemberBinding="{Binding Status}" />
-                        <GridViewColumn Header="说明" Width="150" DisplayMemberBinding="{Binding Details}" />
+                        <GridViewColumn Header="状态" Width="100" DisplayMemberBinding="{Binding Status}" />
+                        <GridViewColumn Header="说明" Width="210">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Details}" ToolTip="{Binding Details}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
                         <GridViewColumn Header="操作" Width="110">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>

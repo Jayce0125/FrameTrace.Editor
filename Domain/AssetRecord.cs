@@ -58,4 +58,6 @@ public sealed class AssetMetadata
     public long? Size { get; init; }
 
     public string? Feature { get; init; }
+
+    public string? Skills { get; init; }
 }

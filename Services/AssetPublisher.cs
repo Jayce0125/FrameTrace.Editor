@@ -16,21 +16,51 @@ public sealed class AssetPublisher
         WriteIndented = true
     };
 
+    private static string? GetSourceAccessError(ImportPreviewRecord previewRecord, FileInfo mainVideo)
+    {
+        if (!Directory.Exists(previewRecord.SourceDirectory))
+        {
+            return "记录文件夹在发布过程中不存在或无法访问。";
+        }
+
+        if (!mainVideo.Exists)
+        {
+            return $"主视频“{mainVideo.Name}”在发布过程中不存在或无法访问。";
+        }
+
+        try
+        {
+            using var stream = File.Open(mainVideo.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return $"无法读取主视频“{mainVideo.Name}”：{exception.Message}";
+        }
+    }
+
     public PublishResult Publish(ImportPreviewRecord previewRecord, LibraryConfiguration configuration, string folderName)
     {
         if (!previewRecord.IsReadyForPublication || previewRecord.ScanResult.MainVideo is null)
         {
-            return PublishResult.Failed("记录未通过发布校验。请确认主视频和提示词。");
+            return PublishResult.Skipped($"发布开始前校验未通过：{previewRecord.GetBlockingReason()}");
         }
 
         var assetsDirectory = configuration.AssetsDirectory;
-        Directory.CreateDirectory(assetsDirectory);
         var mainVideo = previewRecord.ScanResult.MainVideo;
-        var duplicateCheck = duplicateAssetDetector.Check(mainVideo.FullName, assetsDirectory);
+        var sourceAccessError = GetSourceAccessError(previewRecord, mainVideo);
+        if (sourceAccessError is not null)
+        {
+            return PublishResult.Skipped(sourceAccessError);
+        }
+
+        Directory.CreateDirectory(assetsDirectory);
+        var duplicateCheck = duplicateAssetDetector.Check(mainVideo.FullName, previewRecord.DisplayName, assetsDirectory);
         if (duplicateCheck.IsDuplicate)
         {
             return PublishResult.Skipped($"与已发布记录“{duplicateCheck.ExistingDisplayName}”的主视频内容相同。");
         }
+
 
         var assetId = Guid.NewGuid().ToString();
         var physicalDirectoryName = BuildPhysicalDirectoryName(previewRecord.DisplayName, assetId, assetsDirectory);
@@ -66,7 +96,8 @@ public sealed class AssetPublisher
                     Quality = previewRecord.Metadata.Quality,
                     AspectRatio = previewRecord.Metadata.AspectRatio,
                     Size = mainVideo.Length,
-                    Feature = previewRecord.Metadata.Feature
+                    Feature = previewRecord.Metadata.Feature,
+                    Skills = previewRecord.Metadata.Skills
                 }
             };
 
@@ -168,11 +199,20 @@ public sealed class PublishResult
 
     public string? ErrorMessage { get; }
 
+    public string? SkipReason => IsSkipped ? ErrorMessage : null;
+
     public static PublishResult Succeeded(string assetId, string publishedDirectory, AssetRecord record, string? warningMessage) =>
         new(true, false, assetId, publishedDirectory, record, warningMessage, null);
 
-    public static PublishResult Skipped(string message) =>
-        new(false, true, null, null, null, null, message);
+    public static PublishResult Skipped(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new ArgumentException("跳过原因不能为空。", nameof(reason));
+        }
+
+        return new(false, true, null, null, null, null, reason);
+    }
 
     public static PublishResult Failed(string errorMessage) =>
         new(false, false, null, null, null, null, errorMessage);

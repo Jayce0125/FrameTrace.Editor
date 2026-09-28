@@ -635,7 +635,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
     private IReadOnlyList<string> SplitReferencePaths() => ReferencePathsTextBox.Text.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
-public sealed class LibraryAssetRow
+public sealed class LibraryAssetRow : System.ComponentModel.INotifyPropertyChanged
 {
     public LibraryAssetRow(LibraryAsset asset)
     {

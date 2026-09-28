@@ -11,7 +11,7 @@ public static class MetadataCsvReader
         var metadataPath = Path.Combine(recordDirectory, "metadata.csv");
         if (!File.Exists(metadataPath))
         {
-            return new ImportMetadata(null, null, null, null, "缺少必要的 metadata.csv 文件。");
+            return new ImportMetadata(null, null, null, null, null, "缺少必要的 metadata.csv 文件。");
         }
 
         try
@@ -30,11 +30,12 @@ public static class MetadataCsvReader
                 GetValue(values, "清晰度", "quality"),
                 GetValue(values, "宽高比", "aspect_ratio"),
                 GetValue(values, "生成模型或功能", "生成模型", "功能", "feature"),
+                GetValue(values, "使用了哪些skill", "使用的skill", "skills", "skill"),
                 invalidCreated ? "metadata.csv 中的“创建时间”无法识别，请使用如 2026-09-17 14:30 的时间格式。" : null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return new ImportMetadata(null, null, null, null, $"无法读取 metadata.csv：{exception.Message}");
+            return new ImportMetadata(null, null, null, null, null, $"无法读取 metadata.csv：{exception.Message}");
         }
     }
 
@@ -69,7 +70,7 @@ public static class MetadataCsvReader
     }
 }
 
-public sealed record ImportMetadata(DateTimeOffset? Created, string? Quality, string? AspectRatio, string? Feature, string? Warning)
+public sealed record ImportMetadata(DateTimeOffset? Created, string? Quality, string? AspectRatio, string? Feature, string? Skills, string? Warning)
 {
-    public static ImportMetadata Empty { get; } = new(null, null, null, null, null);
+    public static ImportMetadata Empty { get; } = new(null, null, null, null, null, null);
 }

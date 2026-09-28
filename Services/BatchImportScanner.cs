@@ -25,7 +25,7 @@ public sealed class BatchImportScanner
         var batchRoot = Path.GetFullPath(batchDirectory);
         var records = new DirectoryInfo(batchDirectory)
             .EnumerateDirectories("*", SearchOption.AllDirectories)
-            .Where(HasMainVideo)
+            .Where(ContainsVideo)
             .OrderBy(directory => Path.GetRelativePath(batchRoot, directory.FullName), StringComparer.OrdinalIgnoreCase)
             .Select(directory => CreatePreviewRecord(
                 directory.FullName,
@@ -35,7 +35,7 @@ public sealed class BatchImportScanner
         if (records.Length == 0)
         {
             return new ImportPreview(batchDirectory, ImportSourceKind.BatchDirectory,
-                [ImportPreviewRecord.Failed(batchDirectory, "批次目录中未找到可识别的记录文件夹。记录目录应直接包含与目录同名的视频文件，例如：分类/10/10.mp4")]);
+                [ImportPreviewRecord.Failed(batchDirectory, "批次目录中未找到包含视频文件的记录文件夹。记录目录应直接包含与目录同名的视频文件，例如：分类/10/10.mp4")]);
         }
 
         return new ImportPreview(batchDirectory, ImportSourceKind.BatchDirectory, records);
@@ -51,9 +51,8 @@ public sealed class BatchImportScanner
             suggestedCategoryPath);
     }
 
-    private static bool HasMainVideo(DirectoryInfo directory) => directory.EnumerateFiles()
-        .Any(file => string.Equals(Path.GetFileNameWithoutExtension(file.Name), directory.Name, StringComparison.OrdinalIgnoreCase)
-            && RecordFolderScanner.IsVideoExtension(file.Extension));
+    private static bool ContainsVideo(DirectoryInfo directory) =>
+        directory.EnumerateFiles().Any(file => RecordFolderScanner.IsVideoExtension(file.Extension));
 }
 
 public enum ImportSourceKind
@@ -81,7 +80,14 @@ public sealed class ImportPreview
 
     public int ReadyCount => Records.Count(record => record.IsReadyForPublication);
 
-    public int NeedsAttentionCount => Records.Count(record => !record.IsReadyForPublication);
+    public int NeedsAttentionCount => Records.Count(record =>
+        record.ImportState == ImportState.Pending && !record.IsReadyForPublication);
+
+    public int ImportedCount => Records.Count(record => record.ImportState == ImportState.Imported);
+
+    public int SkippedCount => Records.Count(record => record.ImportState == ImportState.Skipped);
+
+    public int FailedCount => Records.Count(record => record.ImportState == ImportState.Failed);
 }
 
 public sealed class ImportPreviewRecord
@@ -111,16 +117,49 @@ public sealed class ImportPreviewRecord
 
     public bool IsPromptConfirmed { get; private set; }
 
+    public ImportState ImportState { get; private set; }
+
+    public string? ImportMessage { get; private set; }
+
+    public string? PreflightMessage { get; private set; }
+
     public bool IsReadyForPublication =>
-        ScanResult.IsValid && Metadata.Warning is null && IsPromptConfirmed && !string.IsNullOrWhiteSpace(ConfirmedPrompt);
+        ImportState == ImportState.Pending &&
+        ScanResult.IsValid &&
+        Metadata.Warning is null &&
+        PreflightMessage is null &&
+        IsPromptConfirmed &&
+        !string.IsNullOrWhiteSpace(ConfirmedPrompt);
 
     public void ConfirmPrompt(string prompt)
     {
         ConfirmedPrompt = prompt;
         IsPromptConfirmed = true;
+        ResetImportState();
     }
 
-    public void ReloadMetadata() => Metadata = MetadataCsvReader.Read(SourceDirectory);
+    public void ReloadMetadata()
+    {
+        Metadata = MetadataCsvReader.Read(SourceDirectory);
+        ResetImportState();
+    }
+
+    public void SetMetadataWarning(string warning) =>
+        Metadata = Metadata with { Warning = warning };
+
+    public string GetBlockingReason() =>
+        ScanResult.ErrorMessage ??
+        Metadata.Warning ??
+        PreflightMessage ??
+        (string.IsNullOrWhiteSpace(ConfirmedPrompt) ? "提示词不能为空。" : "记录未通过发布校验。");
+
+    public void SetPreflightMessage(string? message) => PreflightMessage = message;
+
+    public void MarkImported() => SetImportState(ImportState.Imported, null);
+
+    public void MarkSkipped(string reason) => SetImportState(ImportState.Skipped, reason);
+
+    public void MarkFailed(string reason) => SetImportState(ImportState.Failed, reason);
 
     public static ImportPreviewRecord Failed(string sourceDirectory, string message) =>
         new(sourceDirectory, Path.GetFileName(sourceDirectory), RecordScanResult.Failed(message));
@@ -141,4 +180,20 @@ public sealed class ImportPreviewRecord
             return null;
         }
     }
+
+    private void ResetImportState() => SetImportState(ImportState.Pending, null);
+
+    private void SetImportState(ImportState importState, string? message)
+    {
+        ImportState = importState;
+        ImportMessage = message;
+    }
+}
+
+public enum ImportState
+{
+    Pending,
+    Imported,
+    Skipped,
+    Failed
 }

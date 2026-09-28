@@ -77,7 +77,7 @@
                                             <RowDefinition Height="*" />
                                             <RowDefinition Height="5" />
                                         </Grid.RowDefinitions>
-                                        <Border Grid.Row="0"
+                                        <Border x:Name="ItemBorder" Grid.Row="0"
                                                 Background="{TemplateBinding Background}"
                                                 BorderBrush="{TemplateBinding BorderBrush}"
                                                 BorderThickness="{TemplateBinding BorderThickness}">
@@ -89,19 +89,13 @@
                                                    HorizontalAlignment="Stretch"
                                                    Fill="#FF0084FF"
                                                    Visibility="{Binding Content.IsDropTarget, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        <!--<Border >
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="Transparent" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
-                                                            <Setter Property="Background" Value="#2D7DCC" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>-->
                                     </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="#DCEBFF" />
+                                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#7AADE8" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
                         </Setter>

@@ -100,7 +100,7 @@ public sealed class LibraryAssetManager
             Prompt = record.Prompt,
             ContentHash = ComputeHash(mainVideoPath),
             References = references,
-            Meta = new AssetMetadata { Created = record.Meta.Created, Quality = record.Meta.Quality, AspectRatio = record.Meta.AspectRatio, Size = new FileInfo(mainVideoPath).Length, Feature = record.Meta.Feature },
+            Meta = new AssetMetadata { Created = record.Meta.Created, Quality = record.Meta.Quality, AspectRatio = record.Meta.AspectRatio, Size = new FileInfo(mainVideoPath).Length, Feature = record.Meta.Feature, Skills = record.Meta.Skills },
             Author = record.Author,
             Tags = record.Tags,
             Rating = record.Rating,
@@ -173,4 +173,3 @@ public sealed class LibraryAssetManager
 }
 
 public sealed record LibraryAsset(string RecordPath, AssetRecord Record);
-
