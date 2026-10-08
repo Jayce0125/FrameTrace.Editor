@@ -92,13 +92,30 @@
             </ListView>
             <Grid Grid.Row="3" Margin="0,16,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="280" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="PromptTextBox" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" MinHeight="96" Padding="8" IsEnabled="False" />
-                <Button Grid.Column="1" x:Name="ConfirmPromptButton" Margin="12,0,0,0" Padding="12,5"
-                        VerticalAlignment="Top" IsEnabled="False" Click="ConfirmPrompt_Click">确认提示词</Button>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="PromptTextBox" AcceptsReturn="True" TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto" MinHeight="96" Padding="8" IsEnabled="False" />
+                    <Button Grid.Column="1" x:Name="ConfirmPromptButton" Margin="12,0,0,0" Padding="12,5"
+                            VerticalAlignment="Top" IsEnabled="False" Click="ConfirmPrompt_Click">确认提示词</Button>
+                </Grid>
+                <Border Grid.Column="1" Margin="16,0,0,0" Padding="12,8"
+                        BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="3">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="记录详细信息" FontWeight="SemiBold" />
+                            <TextBlock x:Name="RecordDetailsTextBlock" Margin="0,8,0,0"
+                                       Foreground="#555555" TextWrapping="Wrap"
+                                       Text="选择一条记录后查看视频、元数据和校验信息。" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
             </Grid>
             </Grid>
             </Grid>
