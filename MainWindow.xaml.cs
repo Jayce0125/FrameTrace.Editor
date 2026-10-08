@@ -183,9 +183,14 @@ public partial class MainWindow : Window
                     var existingMetadata = MetadataCsvReader.Read(record.SourceDirectory);
                     MetadataCsvWriter.WriteCreatedTime(metadataPath, record.ScanResult.MainVideo.CreationTime);
                     var dimensions = VideoMetadataReader.ReadDimensions(record.ScanResult.MainVideo.FullName, configuration);
-                    if (dimensions is not null && string.IsNullOrWhiteSpace(existingMetadata.AspectRatio))
+                    if (dimensions is not null)
                     {
-                        MetadataCsvWriter.WriteVideoProperties(metadataPath, dimensions);
+                        MetadataCsvWriter.WriteVideoProperties(
+                            metadataPath,
+                            dimensions,
+                            configuration.QualityOptions,
+                            string.IsNullOrWhiteSpace(existingMetadata.Quality),
+                            string.IsNullOrWhiteSpace(existingMetadata.AspectRatio));
                     }
                 }
 
@@ -438,15 +443,22 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
                 Record.PreflightMessage ??
                 (Record.IsReadyForPublication ? "校验通过" : "提示词不能为空")
         };
+        DetailsWithoutWarning = Details;
+        AspectRatioWarningText = string.Empty;
         if (!string.IsNullOrWhiteSpace(Record.AspectRatioWarning))
         {
-            Details += $"；警告：{Record.AspectRatioWarning}";
+            AspectRatioWarningText = $"警告：{Record.AspectRatioWarning}";
+            Details += $"；{AspectRatioWarningText}";
         }
         ReferenceCount = Record.ScanResult.References.Count.ToString();
         PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
     }
 
     public bool IsMetadataMissing => Record.Metadata.Warning == "缺少必要的 metadata.csv 文件。";
+
+    public string DetailsWithoutWarning { get; private set; } = string.Empty;
+
+    public string AspectRatioWarningText { get; private set; } = string.Empty;
 
     public string DisplayName { get; private set; } = string.Empty;
 

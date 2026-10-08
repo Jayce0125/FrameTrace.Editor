@@ -11,14 +11,30 @@ public static class MetadataCsvWriter
         WriteValues(metadataPath, ("创建时间", creationTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)));
     }
 
-    public static void WriteVideoProperties(string metadataPath, VideoDimensions dimensions)
+    public static void WriteVideoProperties(
+        string metadataPath,
+        VideoDimensions dimensions,
+        IReadOnlyList<QualityOption> qualityOptions,
+        bool writeQuality,
+        bool writeAspectRatio)
     {
-        var quality = dimensions.Height >= 2160 ? "4K"
-            : dimensions.Height >= 1440 ? "2K"
-            : $"{dimensions.Height}p";
         var divisor = GreatestCommonDivisor(dimensions.Width, dimensions.Height);
         var aspectRatio = $"{dimensions.Width / divisor}:{dimensions.Height / divisor}";
-        WriteValues(metadataPath, ("清晰度", quality), ("宽高比", aspectRatio));
+        var values = new List<(string Field, string Value)>();
+        if (writeQuality)
+        {
+            values.Add(("清晰度", VideoQualityMatcher.Match(dimensions, qualityOptions)));
+        }
+
+        if (writeAspectRatio)
+        {
+            values.Add(("宽高比", aspectRatio));
+        }
+
+        if (values.Count > 0)
+        {
+            WriteValues(metadataPath, values.ToArray());
+        }
     }
 
     private static void WriteValues(string metadataPath, params (string Field, string Value)[] valuesToWrite)

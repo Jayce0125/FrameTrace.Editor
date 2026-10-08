@@ -4,6 +4,14 @@
   "thumbnail_quality": 80,
   "thumbnail_position_fraction": 0.1,
   "viewer_page_size": 100,
+  "quality_options": [
+    { "name": "4K", "min_short_edge": 2160, "max_aspect_ratio": 3.0 },
+    { "name": "2K", "min_short_edge": 1440, "max_aspect_ratio": 3.0 },
+    { "name": "1080p", "min_short_edge": 1080, "max_aspect_ratio": 3.0 },
+    { "name": "720p", "min_short_edge": 720, "max_aspect_ratio": 3.0 },
+    { "name": "480p", "min_short_edge": 480, "max_aspect_ratio": 3.0 },
+    { "name": "低于480p", "min_short_edge": 0, "max_aspect_ratio": 100.0 }
+  ],
   "aspect_ratio_options": [
     { "name": "1:1", "min": 0.95, "max": 1.05 },
     { "name": "4:3", "min": 1.18, "max": 1.39 },

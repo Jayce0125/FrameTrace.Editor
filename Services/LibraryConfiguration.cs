@@ -35,12 +35,28 @@ public sealed class LibraryConfiguration
         new("2:3", 0.62, 0.70)
     ];
 
+    public IReadOnlyList<QualityOption> QualityOptions { get; init; } =
+        QualityOption.Defaults;
+
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(AssetsDirectory) &&
         !string.IsNullOrWhiteSpace(WebViewerDirectory);
 }
 
 public sealed record AspectRatioOption(string Name, double Min, double Max);
+
+public sealed record QualityOption(string Name, int MinShortEdge, double MaxAspectRatio)
+{
+    public static IReadOnlyList<QualityOption> Defaults { get; } =
+    [
+        new("4K", 2160, 3.0),
+        new("2K", 1440, 3.0),
+        new("1080p", 1080, 3.0),
+        new("720p", 720, 3.0),
+        new("480p", 480, 3.0),
+        new("低于480p", 0, double.MaxValue)
+    ];
+}
 
 public sealed class PathConfiguration
 {
@@ -76,6 +92,9 @@ public sealed class SettingsConfiguration
         new("3:4", 0.72, 0.80),
         new("2:3", 0.62, 0.70)
     ];
+
+    public IReadOnlyList<QualityOption> QualityOptions { get; init; } =
+        QualityOption.Defaults;
 }
 
 public static class LibraryConfigurationLoader
@@ -119,7 +138,8 @@ public static class LibraryConfigurationLoader
             ThumbnailQuality = settings.ThumbnailQuality,
             ThumbnailPositionFraction = settings.ThumbnailPositionFraction,
             ViewerPageSize = settings.ViewerPageSize,
-            AspectRatioOptions = settings.AspectRatioOptions
+            AspectRatioOptions = settings.AspectRatioOptions,
+            QualityOptions = settings.QualityOptions
         };
     }
 }

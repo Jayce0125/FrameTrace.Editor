@@ -70,7 +70,13 @@
                         <GridViewColumn Header="说明" Width="210">
                             <GridViewColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding Details}" ToolTip="{Binding Details}" TextTrimming="CharacterEllipsis" />
+                                    <StackPanel ToolTip="{Binding Details}">
+                                        <TextBlock Text="{Binding DetailsWithoutWarning}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding AspectRatioWarningText}"
+                                                   Foreground="#C62828"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </GridViewColumn.CellTemplate>
                         </GridViewColumn>
