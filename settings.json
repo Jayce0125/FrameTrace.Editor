@@ -1,0 +1,17 @@
+{
+  "project_name": "玄机灵界素材库",
+  "thumbnail_width": 640,
+  "thumbnail_quality": 80,
+  "thumbnail_position_fraction": 0.1,
+  "viewer_page_size": 100,
+  "aspect_ratio_options": [
+    { "name": "1:1", "min": 0.95, "max": 1.05 },
+    { "name": "4:3", "min": 1.18, "max": 1.39 },
+    { "name": "3:2", "min": 1.40, "max": 1.60 },
+    { "name": "16:9", "min": 1.68, "max": 1.88 },
+    { "name": "21:9", "min": 2.20, "max": 2.45 },
+    { "name": "9:16", "min": 0.53, "max": 0.60 },
+    { "name": "3:4", "min": 0.72, "max": 0.80 },
+    { "name": "2:3", "min": 0.62, "max": 0.70 }
+  ]
+}

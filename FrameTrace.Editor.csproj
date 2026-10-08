@@ -16,6 +16,9 @@
     <None Update="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="metadata.csv.example">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -16,8 +16,6 @@ public sealed class AssetRecord
 
     public string CategoryId { get; set; } = string.Empty;
 
-    public int Order { get; set; }
-
     [JsonIgnore]
     public string? SourcePath { get; set; }
 

@@ -35,7 +35,7 @@ public sealed class DuplicateAssetDetector
                 continue;
             }
 
-            var existingVideoPath = Path.Combine(Path.GetDirectoryName(recordPath)!, record.LocalPath);
+            var existingVideoPath = ResolveVideoPath(recordPath, record.LocalPath, assetsDirectory);
             if (!File.Exists(existingVideoPath))
             {
                 continue;
@@ -49,6 +49,29 @@ public sealed class DuplicateAssetDetector
         }
 
         return DuplicateCheckResult.Unique(sourceHash);
+    }
+
+    private static string ResolveVideoPath(string recordPath, string localPath, string assetsDirectory)
+    {
+        var normalizedPath = localPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        var recordDirectory = Path.GetDirectoryName(recordPath)!;
+        var relativeToRecordPath = Path.GetFullPath(Path.Combine(recordDirectory, normalizedPath));
+        if (File.Exists(relativeToRecordPath))
+        {
+            return relativeToRecordPath;
+        }
+
+        const string webViewerAssetsPrefix = "../assets/";
+        if (localPath.StartsWith(webViewerAssetsPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFullPath(Path.Combine(
+                assetsDirectory,
+                localPath[webViewerAssetsPrefix.Length..]
+                    .Replace('/', Path.DirectorySeparatorChar)
+                    .Replace('\\', Path.DirectorySeparatorChar)));
+        }
+
+        return relativeToRecordPath;
     }
 
     private static AssetRecord? TryReadRecord(string recordPath)

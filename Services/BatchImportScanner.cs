@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 
 namespace FrameTrace.Editor.Services;
@@ -123,6 +124,8 @@ public sealed class ImportPreviewRecord
 
     public string? PreflightMessage { get; private set; }
 
+    public string? AspectRatioWarning { get; private set; }
+
     public bool IsReadyForPublication =>
         ImportState == ImportState.Pending &&
         ScanResult.IsValid &&
@@ -141,7 +144,33 @@ public sealed class ImportPreviewRecord
     public void ReloadMetadata()
     {
         Metadata = MetadataCsvReader.Read(SourceDirectory);
+        AspectRatioWarning = null;
         ResetImportState();
+    }
+
+    public void NormalizeAspectRatio(LibraryConfiguration configuration)
+    {
+        var rawAspectRatio = Metadata.AspectRatio;
+        if (string.IsNullOrWhiteSpace(rawAspectRatio) && ScanResult.MainVideo is not null)
+        {
+            var dimensions = VideoMetadataReader.ReadDimensions(ScanResult.MainVideo.FullName, configuration);
+            rawAspectRatio = dimensions is null
+                ? null
+                : $"{dimensions.Width.ToString(CultureInfo.InvariantCulture)}:{dimensions.Height.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        if (string.IsNullOrWhiteSpace(rawAspectRatio))
+        {
+            AspectRatioWarning = "无法读取宽高比，未能匹配常见比例。";
+            return;
+        }
+
+        var match = AspectRatioMatcher.Match(rawAspectRatio, configuration.AspectRatioOptions ?? []);
+        AspectRatioWarning = match.Warning;
+        if (match.Standard is not null)
+        {
+            Metadata = Metadata with { AspectRatio = match.Standard };
+        }
     }
 
     public void SetMetadataWarning(string warning) =>

@@ -20,6 +20,7 @@
             <TextBlock x:Name="SummaryTextBlock" VerticalAlignment="Center" Foreground="#555555" Text="正在读取已入库素材..." />
             <StackPanel Grid.Column="1" Orientation="Horizontal">
                 <Button Padding="12,5" Click="Reload_Click">刷新列表</Button>
+                <Button x:Name="SortCurrentCategoryAssetsButton" Margin="8,0,0,0" Padding="12,5" Click="SortCurrentCategoryAssets_Click" IsEnabled="False">按名称重排当前分类</Button>
                 <Button Margin="8,0,0,0" Padding="12,5" Click="RepairAndPublish_Click">修复并发布索引</Button>
                 <Button Margin="8,0,0,0" Padding="12,5" Click="DeleteSelected_Click">删除选中</Button>
                 <Button Margin="8,0,0,0" Padding="12,5" Click="ClearLibrary_Click">清空素材库</Button>

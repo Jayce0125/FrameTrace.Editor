@@ -54,7 +54,7 @@ public sealed class LibraryAssetManager
             }
         }
 
-        return assets.OrderBy(asset => asset.Record.FolderName).ThenBy(asset => asset.Record.Order).ThenBy(asset => asset.Record.DisplayName).ToArray();
+        return assets.OrderBy(asset => asset.Record.FolderName).ThenBy(asset => asset.Record.DisplayName).ToArray();
     }
 
     public AssetRecord ReplaceMedia(
@@ -95,7 +95,6 @@ public sealed class LibraryAssetManager
             LocalPath = localPath,
             FolderName = record.FolderName,
             CategoryId = record.CategoryId,
-            Order = record.Order,
             PosterPath = posterPath,
             Prompt = record.Prompt,
             ContentHash = ComputeHash(mainVideoPath),

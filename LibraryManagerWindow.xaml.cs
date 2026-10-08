@@ -34,12 +34,32 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
     private LibraryAssetRow? draggedAsset;
     private LibraryAssetRow? assetDropPreviewRow;
     private string? selectedCategoryPath;
+    private readonly Dictionary<string, int> assetOrder = new(StringComparer.OrdinalIgnoreCase);
 
     public LibraryManagerWindow()
     {
         InitializeComponent();
         AssetListView.ItemsSource = visibleAssets;
         CategoryTreeView.ItemsSource = categoryTree;
+    }
+
+    private static IEnumerable<CategoryNodeModel> OrderCategoryNodes(IReadOnlyList<CategoryNodeModel> nodes, ViewerOrderDocument order)
+    {
+        var byId = nodes.ToDictionary(node => node.Id, StringComparer.OrdinalIgnoreCase);
+        return OrderChildren(null);
+
+        IEnumerable<CategoryNodeModel> OrderChildren(string? parentId)
+        {
+            var ids = ViewerOrderStore.Siblings(order, parentId);
+            var children = ids.Where(byId.ContainsKey).Select(id => byId[id])
+                .Concat(nodes.Where(node => string.Equals(node.ParentId, parentId, StringComparison.OrdinalIgnoreCase) && !ids.Contains(node.Id, StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase));
+            foreach (var child in children)
+            {
+                yield return child;
+                foreach (var descendant in OrderChildren(child.Id)) yield return descendant;
+            }
+        }
     }
 
     public void Configure(LibraryConfiguration libraryConfiguration)
@@ -49,6 +69,19 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
     }
 
     private void Reload_Click(object sender, RoutedEventArgs eventArgs) => ReloadData();
+
+    private void SortCurrentCategoryAssets_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (CategoryTreeView.SelectedItem is not CategoryTreeItem { Id: not null } category)
+        {
+            MessageBox.Show("请先在左侧选择一个分类。", "无法排序", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ExecuteOrderChange(
+            () => categoryManager.SortRecordsByName(assets.Select(row => row.Asset).ToArray(), category.Id, configuration.WebViewerDirectory),
+            $"“{category.Name}”下的素材已按名称重新排序。", true, false);
+    }
 
     private void RepairAndPublish_Click(object sender, RoutedEventArgs eventArgs)
     {
@@ -83,6 +116,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     public void ReloadData()
     {
+        SortCurrentCategoryAssetsButton.IsEnabled = false;
         if (!configuration.IsConfigured)
         {
             SummaryTextBlock.Text = "请先在 config.json 中配置素材库目录。";
@@ -97,6 +131,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             {
                 assets.Add(new LibraryAssetRow(record));
             }
+            categoryManager.SynchronizeRecordCategoryIds(records, configuration.WebViewerDirectory);
             LoadCategoryTree();
 
             ShowAllAssets();
@@ -118,10 +153,12 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         var nodes = categoryManager.Load(configuration.WebViewerDirectory)
             .Where(node => !string.IsNullOrWhiteSpace(node.Id) && !string.IsNullOrWhiteSpace(node.Name))
             .ToArray();
+        var order = categoryManager.LoadOrder(configuration.WebViewerDirectory);
+        LoadAssetOrder(order);
         if (nodes.Length > 0)
         {
-            var items = nodes.ToDictionary(node => node.Id, node => new CategoryTreeItem(node.Id, node.Name, node.Order, false, BuildCategoryPath(node, nodes), node.ParentId));
-            foreach (var node in nodes)
+            var items = nodes.ToDictionary(node => node.Id, node => new CategoryTreeItem(node.Id, node.Name, false, BuildCategoryPath(node, nodes), node.ParentId));
+            foreach (var node in OrderCategoryNodes(nodes, order))
             {
                 if (node.ParentId is not null && items.TryGetValue(node.ParentId, out var parent))
                 {
@@ -138,12 +175,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             BuildCategoryTreeFromAssets();
         }
 
-        foreach (var item in categoryTree)
-        {
-            item.SortChildren();
-        }
-
-        var allAssets = new CategoryTreeItem(null, "全部分类", -1, true, null);
+        var allAssets = new CategoryTreeItem(null, "全部分类", true, null);
         foreach (var item in categoryTree)
         {
             allAssets.Children.Add(item);
@@ -182,7 +214,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
                     var id = index == parts.Length - 1 && !string.IsNullOrWhiteSpace(asset.Asset.Record.CategoryId)
                         ? asset.Asset.Record.CategoryId
                         : path;
-                    item = new CategoryTreeItem(id, parts[index], index, false, path, parent?.Id);
+                    item = new CategoryTreeItem(id, parts[index], false, path, parent?.Id);
                     items.Add(path, item);
                     if (parent is null)
                     {
@@ -204,6 +236,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         if (eventArgs.NewValue is CategoryTreeItem item)
         {
             selectedCategoryPath = item.Path;
+            SortCurrentCategoryAssetsButton.IsEnabled = item.Id is not null;
             ShowAssetsFor(item);
         }
     }
@@ -260,7 +293,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             return;
         }
 
-        ExecuteCategoryChange(
+        ExecuteOrderChange(
             () => categoryManager.ReorderAfter(configuration.WebViewerDirectory, source!.Id!, target!.Id!),
             "分类顺序已更新。", false);
         ClearDropPreview();
@@ -335,8 +368,8 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             return;
         }
 
-        ExecuteCategoryChange(
-            () => categoryManager.ReorderAssetAfter(assets.Select(row => row.Asset).ToArray(), source!.Asset, target!.Asset),
+        ExecuteOrderChange(
+            () => categoryManager.ReorderAssetAfter(assets.Select(row => row.Asset).ToArray(), source!.Asset, target!.Asset, configuration.WebViewerDirectory),
             "素材顺序已更新。", false, false);
         ClearAssetDropPreview();
         eventArgs.Handled = true;
@@ -396,7 +429,7 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
     private void ShowAllAssets()
     {
         visibleAssets.Clear();
-        foreach (var asset in assets.OrderBy(asset => asset.Asset.Record.Order))
+        foreach (var asset in assets.OrderBy(GetAssetOrder).ThenBy(asset => asset.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             visibleAssets.Add(asset);
         }
@@ -408,11 +441,13 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         foreach (var asset in assets.Where(asset => item.Path is null ||
             string.Equals(asset.FolderName, item.Path, StringComparison.OrdinalIgnoreCase) ||
             asset.FolderName.StartsWith(item.Path + "/", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(asset => asset.Asset.Record.Order))
+            .OrderBy(GetAssetOrder).ThenBy(asset => asset.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             visibleAssets.Add(asset);
         }
     }
+
+    private int GetAssetOrder(LibraryAssetRow asset) => assetOrder.TryGetValue(asset.Asset.Record.Id, out var order) ? order : int.MaxValue;
 
     private void ExecuteCategoryChange(Action action, string successMessage, bool showSuccessMessage = true, bool reloadCategories = true)
     {
@@ -434,6 +469,39 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             }
         }
         catch (Exception exception) { MessageBox.Show($"分类操作失败：{exception.Message}", "操作失败", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    private void ExecuteOrderChange(Action action, string successMessage, bool showSuccessMessage = true, bool reloadCategories = true)
+    {
+        try
+        {
+            if (!LibraryPublishLock.TryAcquire(configuration.AssetsDirectory, out var publishLock, out var lockError)) { MessageBox.Show(lockError, "无法操作", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            using (publishLock) { action(); }
+
+            LoadAssetOrder();
+            if (reloadCategories)
+            {
+                LoadCategoryTree();
+            }
+            else if (selectedCategoryPath is null)
+            {
+                ShowAllAssets();
+            }
+            else if (FindCategoryTreeItemByPath(selectedCategoryPath) is { } selectedItem)
+            {
+                ShowAssetsFor(selectedItem);
+            }
+            else
+            {
+                ShowAllAssets();
+            }
+
+            if (showSuccessMessage)
+            {
+                MessageBox.Show(successMessage, "操作完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+        catch (Exception exception) { MessageBox.Show($"排序操作失败：{exception.Message}", "操作失败", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void AssetListView_SelectionChanged(object sender, SelectionChangedEventArgs eventArgs)
@@ -488,6 +556,8 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         {
             assets.Add(new LibraryAssetRow(record));
         }
+        categoryManager.SynchronizeRecordCategoryIds(records, configuration.WebViewerDirectory);
+        LoadAssetOrder();
 
         if (selectedCategoryPath is null)
         {
@@ -503,6 +573,19 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         }
 
         ShowAssetsFor(selectedItem);
+    }
+
+    private void LoadAssetOrder()
+    {
+        LoadAssetOrder(categoryManager.LoadOrder(configuration.WebViewerDirectory));
+    }
+
+    private void LoadAssetOrder(ViewerOrderDocument order)
+    {
+        assetOrder.Clear();
+        foreach (var ids in order.CategoryAssets.Values)
+            foreach (var id in ids)
+                if (!assetOrder.ContainsKey(id)) assetOrder[id] = assetOrder.Count;
     }
 
     private CategoryTreeItem? FindCategoryTreeItemByPath(string path)
@@ -673,11 +756,10 @@ public sealed class CategoryOption
 
 public sealed class CategoryTreeItem : System.ComponentModel.INotifyPropertyChanged
 {
-    public CategoryTreeItem(string? id, string name, int order, bool isExpanded, string? path, string? parentId = null)
+    public CategoryTreeItem(string? id, string name, bool isExpanded, string? path, string? parentId = null)
     {
         Id = id;
         Name = name;
-        Order = order;
         IsExpanded = isExpanded;
         Path = path;
         ParentId = parentId;
@@ -685,7 +767,6 @@ public sealed class CategoryTreeItem : System.ComponentModel.INotifyPropertyChan
 
     public string? Id { get; }
     public string Name { get; }
-    public int Order { get; }
     public bool IsExpanded { get; }
     public string? Path { get; }
     public string? ParentId { get; }
@@ -710,17 +791,6 @@ public sealed class CategoryTreeItem : System.ComponentModel.INotifyPropertyChan
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AddDescendantIds(this, ids);
         return ids;
-    }
-
-    public void SortChildren()
-    {
-        var sorted = Children.OrderBy(child => child.Order).ThenBy(child => child.Name, StringComparer.OrdinalIgnoreCase).ToArray();
-        Children.Clear();
-        foreach (var child in sorted)
-        {
-            child.SortChildren();
-            Children.Add(child);
-        }
     }
 
     private static void AddDescendantIds(CategoryTreeItem item, HashSet<string> ids)

@@ -20,13 +20,14 @@ public sealed class CategoryCatalogReader
             var json = script[(start + CategoriesVariable.Length)..].Trim().TrimEnd(';');
             var document = JsonSerializer.Deserialize<CategoryDocument>(json, JsonOptions);
             if (document?.Nodes is null) return [];
+            var order = ViewerOrderStore.Read(webViewerDirectory);
             var nodes = document.Nodes.ToDictionary(node => node.Id, StringComparer.OrdinalIgnoreCase);
-            var paths = new List<(int Order, string Path)>();
-            foreach (var node in document.Nodes.Where(node => node.ParentId is null).OrderBy(node => node.Order))
+            var paths = new List<string>();
+            foreach (var node in OrderedChildren(null, nodes, order))
             {
-                AddPath(node, string.Empty, nodes, paths);
+                AddPath(node, string.Empty, nodes, paths, order);
             }
-            return paths.OrderBy(item => item.Path, StringComparer.OrdinalIgnoreCase).Select(item => item.Path).ToArray();
+            return paths;
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
         {
@@ -34,14 +35,22 @@ public sealed class CategoryCatalogReader
         }
     }
 
-    private static void AddPath(CategoryNode node, string parentPath, IReadOnlyDictionary<string, CategoryNode> nodes, List<(int Order, string Path)> paths)
+    private static void AddPath(CategoryNode node, string parentPath, IReadOnlyDictionary<string, CategoryNode> nodes, List<string> paths, ViewerOrderDocument order)
     {
         var path = parentPath.Length == 0 ? node.Name : $"{parentPath} / {node.Name}";
-        paths.Add((node.Order, path));
-        foreach (var child in nodes.Values.Where(child => string.Equals(child.ParentId, node.Id, StringComparison.OrdinalIgnoreCase)).OrderBy(child => child.Order))
+        paths.Add(path);
+        foreach (var child in OrderedChildren(node.Id, nodes, order))
         {
-            AddPath(child, path, nodes, paths);
+            AddPath(child, path, nodes, paths, order);
         }
+    }
+
+    private static IEnumerable<CategoryNode> OrderedChildren(string? parentId, IReadOnlyDictionary<string, CategoryNode> nodes, ViewerOrderDocument order)
+    {
+        var ids = ViewerOrderStore.Siblings(order, parentId);
+        return ids.Where(nodes.ContainsKey).Select(id => nodes[id])
+            .Concat(nodes.Values.Where(node => string.Equals(node.ParentId, parentId, StringComparison.OrdinalIgnoreCase) && !ids.Contains(node.Id, StringComparer.OrdinalIgnoreCase))
+                .OrderBy(node => node.Name, StringComparer.OrdinalIgnoreCase));
     }
 
     private sealed record CategoryDocument(string Version, IReadOnlyList<CategoryNode> Nodes);
@@ -51,6 +60,5 @@ public sealed class CategoryCatalogReader
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string? ParentId { get; set; }
-        public int Order { get; set; }
     }
 }

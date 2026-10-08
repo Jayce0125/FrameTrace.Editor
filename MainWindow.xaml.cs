@@ -64,7 +64,8 @@ public partial class MainWindow : Window
         currentPreview = sourceKind == ImportSourceKind.SingleRecord
             ? batchImportScanner.ScanSingle(dialog.SelectedPath)
             : batchImportScanner.ScanBatch(dialog.SelectedPath);
-        EnsureMetadataFiles(currentPreview);
+        EnsureMetadataFiles(currentPreview, configuration);
+        NormalizeAspectRatios(currentPreview, configuration);
         RunPreflightChecks(currentPreview);
 
         SourceDirectoryTextBox.Text = currentPreview.SourceDirectory;
@@ -144,6 +145,7 @@ public partial class MainWindow : Window
             row.Record.ReloadMetadata();
             if (currentPreview is not null)
             {
+                NormalizeAspectRatios(currentPreview, configuration);
                 RunPreflightChecks(currentPreview);
             }
             row.Refresh();
@@ -157,31 +159,50 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void EnsureMetadataFiles(ImportPreview preview)
+    private static void EnsureMetadataFiles(ImportPreview preview, LibraryConfiguration configuration)
     {
         var templatePath = Path.Combine(AppContext.BaseDirectory, "metadata.csv.example");
-        if (!File.Exists(templatePath))
-        {
-            foreach (var record in preview.Records.Where(record => record.Metadata.Warning == "缺少必要的 metadata.csv 文件。"))
-            {
-                record.SetMetadataWarning("缺少 metadata.csv，且未找到 metadata.csv.example 模板，无法自动创建。");
-            }
-
-            return;
-        }
-
-        foreach (var record in preview.Records.Where(record => record.Metadata.Warning == "缺少必要的 metadata.csv 文件。"))
+        foreach (var record in preview.Records)
         {
             var metadataPath = Path.Combine(record.SourceDirectory, "metadata.csv");
             try
             {
-                File.Copy(templatePath, metadataPath, false);
+                if (!File.Exists(metadataPath))
+                {
+                    if (!File.Exists(templatePath))
+                    {
+                        record.SetMetadataWarning("缺少 metadata.csv，且未找到 metadata.csv.example 模板，无法自动创建。");
+                        continue;
+                    }
+
+                    File.Copy(templatePath, metadataPath, false);
+                }
+
+                if (record.ScanResult.MainVideo is not null)
+                {
+                    var existingMetadata = MetadataCsvReader.Read(record.SourceDirectory);
+                    MetadataCsvWriter.WriteCreatedTime(metadataPath, record.ScanResult.MainVideo.CreationTime);
+                    var dimensions = VideoMetadataReader.ReadDimensions(record.ScanResult.MainVideo.FullName, configuration);
+                    if (dimensions is not null && string.IsNullOrWhiteSpace(existingMetadata.AspectRatio))
+                    {
+                        MetadataCsvWriter.WriteVideoProperties(metadataPath, dimensions);
+                    }
+                }
+
                 record.ReloadMetadata();
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                record.SetMetadataWarning($"缺少 metadata.csv，且无法从模板自动创建：{exception.Message}");
+                record.SetMetadataWarning($"无法写入 metadata.csv：{exception.Message}");
             }
+        }
+    }
+
+    private static void NormalizeAspectRatios(ImportPreview preview, LibraryConfiguration configuration)
+    {
+        foreach (var record in preview.Records)
+        {
+            record.NormalizeAspectRatio(configuration);
         }
     }
 
@@ -261,6 +282,10 @@ public partial class MainWindow : Window
                     {
                         warnings.Add($"{record.DisplayName}: 封面生成失败：{result.WarningMessage}");
                     }
+                    if (!string.IsNullOrWhiteSpace(record.AspectRatioWarning))
+                    {
+                        warnings.Add($"{record.DisplayName}: {record.AspectRatioWarning}");
+                    }
                 }
                 else if (result.IsSkipped)
                 {
@@ -332,9 +357,6 @@ public partial class MainWindow : Window
         {
             record.SetPreflightMessage(null);
             if (!record.ScanResult.IsValid ||
-                record.Metadata.Warning is not null ||
-                !record.IsPromptConfirmed ||
-                string.IsNullOrWhiteSpace(record.ConfirmedPrompt) ||
                 !configuration.IsConfigured ||
                 record.ScanResult.MainVideo is null)
             {
@@ -416,6 +438,10 @@ public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChan
                 Record.PreflightMessage ??
                 (Record.IsReadyForPublication ? "校验通过" : "提示词不能为空")
         };
+        if (!string.IsNullOrWhiteSpace(Record.AspectRatioWarning))
+        {
+            Details += $"；警告：{Record.AspectRatioWarning}";
+        }
         ReferenceCount = Record.ScanResult.References.Count.ToString();
         PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(null));
     }
