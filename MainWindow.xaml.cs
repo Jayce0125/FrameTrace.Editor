@@ -86,6 +86,7 @@ public partial class MainWindow : Window
         PromptTextBox.Clear();
         PromptTextBox.IsEnabled = false;
         ConfirmPromptButton.IsEnabled = false;
+        RecordDetailsTextBlock.Text = "选择一条记录后查看视频、元数据和校验信息。";
         UpdatePublishAvailability();
     }
 
@@ -96,12 +97,14 @@ public partial class MainWindow : Window
             PromptTextBox.Clear();
             PromptTextBox.IsEnabled = false;
             ConfirmPromptButton.IsEnabled = false;
+            RecordDetailsTextBlock.Text = "选择一条记录后查看视频、元数据和校验信息。";
             return;
         }
 
         PromptTextBox.Text = row.Record.ConfirmedPrompt ?? string.Empty;
         PromptTextBox.IsEnabled = row.Record.ScanResult.IsValid;
         ConfirmPromptButton.IsEnabled = row.Record.ScanResult.IsValid;
+        RecordDetailsTextBlock.Text = BuildRecordDetails(row.Record);
     }
 
     private void ConfirmPrompt_Click(object sender, RoutedEventArgs eventArgs)
@@ -117,6 +120,10 @@ public partial class MainWindow : Window
             RunPreflightChecks(currentPreview);
         }
         row.Refresh();
+        if (ReferenceEquals(PreviewListView.SelectedItem, row))
+        {
+            RecordDetailsTextBlock.Text = BuildRecordDetails(row.Record);
+        }
         RefreshSummary();
         UpdatePublishAvailability();
     }
@@ -149,6 +156,10 @@ public partial class MainWindow : Window
                 RunPreflightChecks(currentPreview);
             }
             row.Refresh();
+            if (ReferenceEquals(PreviewListView.SelectedItem, row))
+            {
+                RecordDetailsTextBlock.Text = BuildRecordDetails(row.Record);
+            }
             RefreshSummary();
             UpdatePublishAvailability();
             Process.Start(new ProcessStartInfo(metadataPath) { UseShellExecute = true });
@@ -167,6 +178,7 @@ public partial class MainWindow : Window
             var metadataPath = Path.Combine(record.SourceDirectory, "metadata.csv");
             try
             {
+                var metadataExisted = File.Exists(metadataPath);
                 if (!File.Exists(metadataPath))
                 {
                     if (!File.Exists(templatePath))
@@ -189,8 +201,8 @@ public partial class MainWindow : Window
                             metadataPath,
                             dimensions,
                             configuration.QualityOptions,
-                            string.IsNullOrWhiteSpace(existingMetadata.Quality),
-                            string.IsNullOrWhiteSpace(existingMetadata.AspectRatio));
+                            !metadataExisted || string.IsNullOrWhiteSpace(existingMetadata.Quality),
+                            !metadataExisted || string.IsNullOrWhiteSpace(existingMetadata.AspectRatio));
                     }
                 }
 
@@ -398,6 +410,44 @@ public partial class MainWindow : Window
             row.Refresh();
         }
     }
+
+    private static string BuildRecordDetails(ImportPreviewRecord record)
+    {
+        var metadata = record.Metadata;
+        var scanResult = record.ScanResult;
+        var mainVideo = scanResult.MainVideo;
+        var promptSource = scanResult.PromptSource
+            ?? (scanResult.CandidatePromptFiles.Count == 0
+                ? "未找到提示词文件"
+                : $"待确认候选文件（{scanResult.CandidatePromptFiles.Count} 个）");
+
+        var details = new List<string>
+        {
+            $"目录：{record.SourceDirectory}",
+            $"主视频：{mainVideo?.Name ?? "未识别"}",
+            $"提示词来源：{promptSource}",
+            $"引用资源：{scanResult.References.Count} 个",
+            $"创建时间：{metadata.Created?.ToString("yyyy-MM-dd HH:mm") ?? "未填写"}",
+            $"清晰度：{metadata.Quality ?? "未填写"}",
+            $"宽高比：{metadata.AspectRatio ?? "未填写"}",
+            $"生成模型：{metadata.Feature ?? "未填写"}",
+            $"技能：{metadata.Skills ?? "未填写"}",
+            $"状态：{GetRecordDetailsStatus(record)}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(record.AspectRatioWarning))
+        {
+            details.Add($"宽高比警告：{record.AspectRatioWarning}");
+        }
+
+        return string.Join(Environment.NewLine, details);
+    }
+
+    private static string GetRecordDetailsStatus(ImportPreviewRecord record) =>
+        record.ScanResult.ErrorMessage ??
+        record.Metadata.Warning ??
+        record.PreflightMessage ??
+        (record.IsReadyForPublication ? "校验通过" : "需要确认提示词");
 }
 
 public sealed class PreviewRecordRow : System.ComponentModel.INotifyPropertyChanged
