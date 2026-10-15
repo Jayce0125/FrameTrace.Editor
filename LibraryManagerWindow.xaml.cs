@@ -1,14 +1,14 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using FrameTrace.Editor.Domain;
 using FrameTrace.Editor.Services;
-using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using MessageBox = System.Windows.MessageBox;
-using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using WpfDragEventArgs = System.Windows.DragEventArgs;
 using WpfDragDropEffects = System.Windows.DragDropEffects;
 using WpfDataObject = System.Windows.DataObject;
@@ -33,8 +33,12 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
     private WpfPoint assetDragStartPoint;
     private LibraryAssetRow? draggedAsset;
     private LibraryAssetRow? assetDropPreviewRow;
+    private LibraryAssetRow? editorAsset;
     private string? selectedCategoryPath;
     private readonly Dictionary<string, int> assetOrder = new(StringComparer.OrdinalIgnoreCase);
+    private bool isLoadingEditor;
+    private bool isRestoringSelection;
+    private bool editorHasChanges;
 
     public LibraryManagerWindow()
     {
@@ -68,7 +72,13 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         ReloadData();
     }
 
-    private void Reload_Click(object sender, RoutedEventArgs eventArgs) => ReloadData();
+    private void Reload_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (ConfirmDiscardEditorChanges("刷新列表"))
+        {
+            ReloadData();
+        }
+    }
 
     private void SortCurrentCategoryAssets_Click(object sender, RoutedEventArgs eventArgs)
     {
@@ -85,6 +95,11 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void RepairAndPublish_Click(object sender, RoutedEventArgs eventArgs)
     {
+        if (!ConfirmDiscardEditorChanges("修复并发布索引"))
+        {
+            return;
+        }
+
         if (!configuration.IsConfigured)
         {
             MessageBox.Show("请先在 config.json 中配置素材库目录。", "无法发布", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -451,6 +466,11 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void ExecuteCategoryChange(Action action, string successMessage, bool showSuccessMessage = true, bool reloadCategories = true)
     {
+        if (!ConfirmDiscardEditorChanges("调整分类"))
+        {
+            return;
+        }
+
         try
         {
             if (!LibraryPublishLock.TryAcquire(configuration.AssetsDirectory, out var publishLock, out var lockError)) { MessageBox.Show(lockError, "无法操作", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
@@ -473,6 +493,11 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void ExecuteOrderChange(Action action, string successMessage, bool showSuccessMessage = true, bool reloadCategories = true)
     {
+        if (!ConfirmDiscardEditorChanges("调整排序"))
+        {
+            return;
+        }
+
         try
         {
             if (!LibraryPublishLock.TryAcquire(configuration.AssetsDirectory, out var publishLock, out var lockError)) { MessageBox.Show(lockError, "无法操作", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
@@ -506,22 +531,112 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void AssetListView_SelectionChanged(object sender, SelectionChangedEventArgs eventArgs)
     {
-        if (AssetListView.SelectedItem is not LibraryAssetRow row)
+        if (isRestoringSelection)
         {
             return;
         }
 
-        VideoPathTextBox.Clear();
-        PosterPathTextBox.Clear();
-        ReferencePathsTextBox.Clear();
+        var selectedRow = AssetListView.SelectedItems.Count == 1
+            ? AssetListView.SelectedItem as LibraryAssetRow
+            : null;
+        if (!ReferenceEquals(editorAsset, selectedRow) && editorHasChanges)
+        {
+            var result = MessageBox.Show(
+                "当前素材有未保存的修改。是否保存后切换？\n\n选择“否”将放弃修改；选择“取消”则继续编辑当前素材。",
+                "未保存的修改",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning);
+            if (result == MessageBoxResult.Cancel)
+            {
+                RestoreEditorSelection();
+                return;
+            }
+
+            if (result == MessageBoxResult.Yes && !SaveEditorChanges(false))
+            {
+                RestoreEditorSelection();
+                return;
+            }
+        }
+
+        if (selectedRow is null)
+        {
+            editorAsset = null;
+            ClearEditor();
+            EditorStatusTextBlock.Text = AssetListView.SelectedItems.Count > 1
+                ? "请选择单条素材进行编辑；可继续多选以执行批量删除。"
+                : "尚未选择素材。";
+            return;
+        }
+
+        editorAsset = selectedRow;
+        LoadEditor(selectedRow);
     }
 
-    private void ReplaceMedia_Click(object sender, RoutedEventArgs eventArgs)
+    private void EditorField_Changed(object sender, RoutedEventArgs eventArgs)
     {
-        if (AssetListView.SelectedItem is not LibraryAssetRow row)
+        if (isLoadingEditor || editorAsset is null)
         {
-            MessageBox.Show("请先选择一条素材。", "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
+        }
+
+        editorHasChanges = true;
+        EditorStatusTextBlock.Text = "有未保存的修改。";
+        SaveEditButton.IsEnabled = true;
+        CancelEditButton.IsEnabled = true;
+    }
+
+    private void SaveEdit_Click(object sender, RoutedEventArgs eventArgs) => SaveEditorChanges(true);
+
+    private void CancelEdit_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (editorAsset is not null)
+        {
+            LoadEditor(editorAsset);
+        }
+    }
+
+    private bool SaveEditorChanges(bool showSuccessMessage)
+    {
+        if (editorAsset is null)
+        {
+            return false;
+        }
+
+        var displayName = DisplayNameTextBox.Text.Trim();
+        var prompt = PromptTextBox.Text;
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            MessageBox.Show("名称不能为空。", "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DisplayNameTextBox.Focus();
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            MessageBox.Show("提示词不能为空。", "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+            PromptTextBox.Focus();
+            return false;
+        }
+
+        DateTimeOffset? created = null;
+        if (CreatedDatePicker.SelectedDate is DateTime selectedDate)
+        {
+            if (!DateTime.TryParseExact(CreatedTimeTextBox.Text.Trim(), "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var selectedTime))
+            {
+                MessageBox.Show("创建时间格式无效，请使用 24 小时制 HH:mm，例如 14:30。", "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                CreatedTimeTextBox.Focus();
+                return false;
+            }
+
+            created = new DateTimeOffset(selectedDate.Date.Add(selectedTime.TimeOfDay));
+        }
+        else if (!string.IsNullOrWhiteSpace(CreatedTimeTextBox.Text))
+        {
+            MessageBox.Show("请先选择创建日期，或清空时间。", "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+            CreatedDatePicker.Focus();
+            return false;
         }
 
         try
@@ -529,22 +644,147 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
             if (!LibraryPublishLock.TryAcquire(configuration.AssetsDirectory, out var publishLock, out var lockError))
             {
                 MessageBox.Show(lockError, "无法保存", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                return false;
             }
 
+            AssetRecord updatedRecord;
             using (publishLock)
             {
-                var updated = assetManager.ReplaceMedia(row.Asset, VideoPathTextBox.Text, PosterPathTextBox.Text,
-                    SplitReferencePaths(), configuration);
+                updatedRecord = assetManager.UpdateTextAndMetadata(
+                    editorAsset.Asset,
+                    displayName,
+                    prompt,
+                    created,
+                    NullIfWhiteSpace(QualityComboBox.SelectedItem as string ?? string.Empty),
+                    NullIfWhiteSpace(AspectRatioComboBox.SelectedItem as string ?? string.Empty),
+                    NullIfWhiteSpace(FeatureTextBox.Text),
+                    NullIfWhiteSpace(SkillsTextBox.Text));
                 indexPublisher.Publish(configuration.AssetsDirectory, configuration.WebViewerDirectory,
                     configuration.ProjectName, configuration.ViewerPageSize);
             }
-            ReloadData();
-            MessageBox.Show("素材已重新上传，网页索引已更新。", "上传完成", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            editorAsset.UpdateAsset(new LibraryAsset(editorAsset.Asset.RecordPath, updatedRecord));
+            LoadEditor(editorAsset);
+            if (showSuccessMessage)
+            {
+                MessageBox.Show("素材信息已保存，网页索引已更新。", "保存完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            return true;
         }
         catch (Exception exception)
         {
             MessageBox.Show($"保存失败：{exception.Message}", "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+    }
+
+    private static string? NullIfWhiteSpace(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void LoadEditor(LibraryAssetRow row)
+    {
+        isLoadingEditor = true;
+        try
+        {
+            var record = row.Asset.Record;
+            DisplayNameTextBox.Text = record.DisplayName;
+            PromptTextBox.Text = record.Prompt;
+            var created = record.Meta.Created?.LocalDateTime;
+            CreatedDatePicker.SelectedDate = created?.Date;
+            CreatedTimeTextBox.Text = created?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty;
+            SetComboOptions(QualityComboBox, configuration.QualityOptions.Select(option => option.Name), record.Meta.Quality);
+            SetComboOptions(AspectRatioComboBox, configuration.AspectRatioOptions.Select(option => option.Name), record.Meta.AspectRatio);
+            FeatureTextBox.Text = record.Meta.Feature ?? string.Empty;
+            SkillsTextBox.Text = record.Meta.Skills ?? string.Empty;
+        }
+        finally
+        {
+            isLoadingEditor = false;
+        }
+
+        EditorEmptyStateTextBlock.Visibility = Visibility.Collapsed;
+        EditorScrollViewer.Visibility = Visibility.Visible;
+        EditorStatusTextBlock.Text = row.VideoName;
+        editorHasChanges = false;
+        SaveEditButton.IsEnabled = false;
+        CancelEditButton.IsEnabled = true;
+    }
+
+    private static void SetComboOptions(System.Windows.Controls.ComboBox comboBox, IEnumerable<string> options, string? currentValue)
+    {
+        comboBox.Items.Clear();
+        comboBox.Items.Add(string.Empty);
+        foreach (var option in options)
+        {
+            comboBox.Items.Add(option);
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentValue) &&
+            !comboBox.Items.Cast<string>().Contains(currentValue, StringComparer.OrdinalIgnoreCase))
+        {
+            comboBox.Items.Add(currentValue);
+        }
+
+        comboBox.SelectedItem = currentValue ?? string.Empty;
+    }
+
+    private bool ConfirmDiscardEditorChanges(string operation)
+    {
+        if (!editorHasChanges)
+        {
+            return true;
+        }
+
+        if (MessageBox.Show(
+                $"当前素材有未保存的修改。继续{operation}将放弃这些修改，是否继续？",
+                "未保存的修改",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return false;
+        }
+
+        if (editorAsset is not null)
+        {
+            LoadEditor(editorAsset);
+        }
+
+        return true;
+    }
+
+    private void ClearEditor()
+    {
+        isLoadingEditor = true;
+        DisplayNameTextBox.Clear();
+        PromptTextBox.Clear();
+        CreatedDatePicker.SelectedDate = null;
+        CreatedTimeTextBox.Clear();
+        QualityComboBox.SelectedIndex = -1;
+        AspectRatioComboBox.SelectedIndex = -1;
+        FeatureTextBox.Clear();
+        SkillsTextBox.Clear();
+        isLoadingEditor = false;
+        EditorScrollViewer.Visibility = Visibility.Collapsed;
+        EditorEmptyStateTextBlock.Visibility = Visibility.Visible;
+        editorHasChanges = false;
+        SaveEditButton.IsEnabled = false;
+        CancelEditButton.IsEnabled = false;
+    }
+
+    private void RestoreEditorSelection()
+    {
+        isRestoringSelection = true;
+        try
+        {
+            AssetListView.SelectedItems.Clear();
+            if (editorAsset is not null)
+            {
+                AssetListView.SelectedItems.Add(editorAsset);
+            }
+        }
+        finally
+        {
+            isRestoringSelection = false;
         }
     }
 
@@ -616,6 +856,11 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void DeleteSelected_Click(object sender, RoutedEventArgs eventArgs)
     {
+        if (!ConfirmDiscardEditorChanges("删除素材"))
+        {
+            return;
+        }
+
         var selected = AssetListView.SelectedItems.Cast<LibraryAssetRow>().ToArray();
         if (selected.Length == 0)
         {
@@ -628,6 +873,11 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
 
     private void ClearLibrary_Click(object sender, RoutedEventArgs eventArgs)
     {
+        if (!ConfirmDiscardEditorChanges("清空素材库"))
+        {
+            return;
+        }
+
         if (assets.Count == 0)
         {
             MessageBox.Show("素材库已经为空。", "无需清空", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -696,41 +946,31 @@ public partial class LibraryManagerWindow : System.Windows.Controls.UserControl
         }
     }
 
-    private void BrowseVideo_Click(object sender, RoutedEventArgs eventArgs) => VideoPathTextBox.Text = SelectFile("视频文件|*.mp4;*.mov;*.mkv;*.avi;*.webm");
-
-    private void BrowsePoster_Click(object sender, RoutedEventArgs eventArgs) => PosterPathTextBox.Text = SelectFile("图片文件|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp");
-
-    private void BrowseReferences_Click(object sender, RoutedEventArgs eventArgs)
-    {
-        var dialog = new OpenFileDialog { Filter = "图片文件|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp", Multiselect = true };
-        if (dialog.ShowDialog() == true)
-        {
-            ReferencePathsTextBox.Text = string.Join("|", dialog.FileNames);
-        }
-    }
-
-    private static string SelectFile(string filter)
-    {
-        var dialog = new OpenFileDialog { Filter = filter };
-        return dialog.ShowDialog() == true ? dialog.FileName : string.Empty;
-    }
-
-    private IReadOnlyList<string> SplitReferencePaths() => ReferencePathsTextBox.Text.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
 public sealed class LibraryAssetRow : System.ComponentModel.INotifyPropertyChanged
 {
+    private LibraryAsset asset;
+    private bool isDropTarget;
+
     public LibraryAssetRow(LibraryAsset asset)
     {
-        Asset = asset;
+        this.asset = asset;
     }
 
-    public LibraryAsset Asset { get; }
+    public LibraryAsset Asset => asset;
     public string DisplayName => Asset.Record.DisplayName;
     public string FolderName => Asset.Record.FolderName;
     public string VideoName => Asset.Record.LocalPath;
 
-    private bool isDropTarget;
+    public void UpdateAsset(LibraryAsset updatedAsset)
+    {
+        asset = updatedAsset;
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(DisplayName)));
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FolderName)));
+        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(VideoName)));
+    }
+
     public bool IsDropTarget
     {
         get => isDropTarget;

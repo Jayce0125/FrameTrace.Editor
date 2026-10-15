@@ -10,7 +10,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
@@ -28,9 +27,11 @@
         </Grid>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220" />
+                <ColumnDefinition Width="200" MinWidth="140" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" MinWidth="280" />
                 <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="400" />
             </Grid.ColumnDefinitions>
             <TreeView x:Name="CategoryTreeView" AllowDrop="True"
                       SelectedItemChanged="CategoryTreeView_SelectedItemChanged"
@@ -60,6 +61,10 @@
                     </Style>
                 </TreeView.Resources>
             </TreeView>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="#D0D0D0" Cursor="SizeWE" ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext" ShowsPreview="False"
+                          ToolTip="拖动以调整分类树和素材列表的宽度" />
             <ListView x:Name="AssetListView" Grid.Column="2" AllowDrop="True"
                       SelectionMode="Extended" SelectionChanged="AssetListView_SelectionChanged"
                       PreviewMouseLeftButtonDown="AssetListView_PreviewMouseLeftButtonDown"
@@ -110,40 +115,74 @@
                     </GridView>
                 </ListView.View>
             </ListView>
-        </Grid>
-        <Grid Grid.Row="2" Margin="0,16,0,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <TextBlock Grid.Row="0" Margin="0,0,0,10" Foreground="#555555"
-                       Text="可重新上传主视频、封面或参考图；名称、提示词和其他资料保持不变。" />
-            <Grid Grid.Row="1" Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock VerticalAlignment="Center" Text="替换主视频" />
-                <TextBox x:Name="VideoPathTextBox" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
-                <Button Grid.Column="2" Padding="12,5" Click="BrowseVideo_Click">选择</Button>
-                <TextBlock Grid.Row="1" VerticalAlignment="Center" Margin="0,8,0,0" Text="替换封面" />
-                <TextBox x:Name="PosterPathTextBox" Grid.Row="1" Grid.Column="1" Margin="8,8" IsReadOnly="True" Padding="6,4" />
-                <Button Grid.Row="1" Grid.Column="2" Padding="12,5" Click="BrowsePoster_Click" Margin="0,6,0,6">选择</Button>
-                <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="替换参考图" />
-                <TextBox x:Name="ReferencePathsTextBox" Grid.Row="2" Grid.Column="1" Margin="8,0" IsReadOnly="True" Padding="6,4" />
-                <Button Grid.Row="2" Grid.Column="2" Padding="12,5" Click="BrowseReferences_Click">选择</Button>
-            </Grid>
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Padding="12,5" Click="ReplaceMedia_Click">重新上传素材</Button>
-                <Button Margin="10,0,0,0" Padding="12,5" Click="Delete_Click">删除此素材</Button>
-            </StackPanel>
+            <Border Grid.Column="4" Padding="12" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="编辑素材信息" FontSize="16" FontWeight="SemiBold" />
+                    <Grid Grid.Row="1" Margin="0,12,0,12">
+                        <TextBlock x:Name="EditorEmptyStateTextBlock" VerticalAlignment="Center"
+                                   HorizontalAlignment="Center" Foreground="#777777" TextWrapping="Wrap"
+                                   Text="选择一条素材以编辑其名称、提示词和生成元数据。" />
+                        <ScrollViewer x:Name="EditorScrollViewer" VerticalScrollBarVisibility="Auto"
+                                      Visibility="Collapsed">
+                            <StackPanel x:Name="EditorFormPanel">
+                                <TextBlock Margin="0,0,0,4" Text="名称" />
+                                <TextBox x:Name="DisplayNameTextBox" Margin="0,0,0,10" Padding="6,4"
+                                         TextChanged="EditorField_Changed" />
+
+                                <TextBlock Margin="0,0,0,4" Text="提示词" />
+                                <TextBox x:Name="PromptTextBox" Margin="0,0,0,14" Padding="6,4"
+                                         MinHeight="100" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" TextChanged="EditorField_Changed" />
+
+                                <TextBlock Margin="0,0,0,8" FontWeight="SemiBold" Text="生成元数据" />
+                                <TextBlock Margin="0,0,0,4" Text="创建时间" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="86" />
+                                    </Grid.ColumnDefinitions>
+                                    <DatePicker x:Name="CreatedDatePicker" SelectedDateChanged="EditorField_Changed" />
+                                    <TextBox x:Name="CreatedTimeTextBox" Grid.Column="1" Margin="6,0,0,0"
+                                             Padding="6,4" ToolTip="时间格式：HH:mm"
+                                             TextChanged="EditorField_Changed" />
+                                </Grid>
+
+                                <TextBlock Margin="0,0,0,4" Text="清晰度" />
+                                <ComboBox x:Name="QualityComboBox" Margin="0,0,0,10" Padding="6,4"
+                                          SelectionChanged="EditorField_Changed" />
+
+                                <TextBlock Margin="0,0,0,4" Text="宽高比" />
+                                <ComboBox x:Name="AspectRatioComboBox" Margin="0,0,0,10" Padding="6,4"
+                                          SelectionChanged="EditorField_Changed" />
+
+                                <TextBlock Margin="0,0,0,4" Text="生成模型或功能" />
+                                <TextBox x:Name="FeatureTextBox" Margin="0,0,0,10" Padding="6,4"
+                                         TextChanged="EditorField_Changed" />
+
+                                <TextBlock Margin="0,0,0,4" Text="使用的 skill" />
+                                <TextBox x:Name="SkillsTextBox" Padding="6,4" MinHeight="64"
+                                         AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto" TextChanged="EditorField_Changed" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                    <StackPanel Grid.Row="2">
+                        <TextBlock x:Name="EditorStatusTextBlock" Margin="0,0,0,8" Foreground="#666666"
+                                   Text="尚未选择素材。" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="CancelEditButton" Padding="12,5" IsEnabled="False"
+                                    Click="CancelEdit_Click">取消</Button>
+                            <Button x:Name="SaveEditButton" Margin="8,0,0,0" Padding="12,5"
+                                    IsEnabled="False" Click="SaveEdit_Click">保存修改</Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </UserControl>
